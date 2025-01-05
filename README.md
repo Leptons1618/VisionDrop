@@ -22,13 +22,13 @@ A computer vision-based drag and drop interface using hand tracking and object d
 ```bash
 git clone https://github.com/yourusername/VisionDrop.git
 cd VisionDrop
-```
+```plaintext
 
 2.Install dependencies:
 
 ```bash
 pip install -r requirements.txt
-```
+```plaintext
 
 ## Usage
 
