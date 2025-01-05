@@ -1,3 +1,6 @@
+from tensorflow_config import configure_tensorflow
+configure_tensorflow()  # Must be called before other imports
+
 import os
 # Suppress TensorFlow logging messages
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
