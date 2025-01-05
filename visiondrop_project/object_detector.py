@@ -30,11 +30,6 @@ class ObjectDetector:
                     'lower': np.array([20, 100, 100]),
                     'upper': np.array([30, 255, 255])
                 },
-                {
-                    'name': 'black',
-                    'lower': np.array([0, 0, 0]),
-                    'upper': np.array([180, 255, 30])
-                },
             ]
 
     def preprocess_frame(self, frame):
