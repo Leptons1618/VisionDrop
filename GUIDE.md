@@ -31,6 +31,22 @@ pip install -r requirements.txt
 - Well-lit environment
 - Yellow objects for detection (e.g., sticky notes, tennis balls)
 
+## System Requirements
+
+### Minimum Requirements
+- CPU: Intel Core i5 or AMD Ryzen 5
+- RAM: 8GB
+- OS: Windows 10, macOS 10.14+, Linux
+- Storage: 500MB free space
+- Camera: 720p webcam
+
+### Recommended Requirements
+- CPU: Intel Core i7 or AMD Ryzen 7
+- RAM: 16GB
+- GPU: NVIDIA GTX 1660 or better
+- Camera: 1080p webcam
+- Storage: 1GB free space
+
 ## Usage Examples
 
 ### Basic Usage
@@ -96,6 +112,31 @@ DROP_ZONES = [
     (100, 100, 300, 300),  # Zone 1: (x1, y1, x2, y2)
     (400, 100, 600, 300)   # Zone 2
 ]
+```
+
+## Advanced Configuration
+
+### Performance Tuning
+```python
+# In config.py
+ENABLE_GPU = True
+PROCESSING_SCALE = 0.5  # Reduce for better performance
+TRACKING_PRECISION = 0.8  # Adjust tracking sensitivity
+```
+
+### Custom Detection Profiles
+```python
+# In config.py
+DETECTION_PROFILES = {
+    'high_precision': {
+        'confidence': 0.9,
+        'min_tracking_confidence': 0.9
+    },
+    'performance': {
+        'confidence': 0.7,
+        'min_tracking_confidence': 0.7
+    }
+}
 ```
 
 ## Troubleshooting

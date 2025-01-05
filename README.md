@@ -11,12 +11,23 @@ A computer vision-based drag and drop interface using hand tracking and object d
 - Logging system for debugging and monitoring
 - Customizable detection zones and colors
 
+## System Requirements
+
+- Operating System: Windows 10/11, macOS 10.14+, or Linux
+- CPU: Intel Core i5/AMD Ryzen 5 or better
+- RAM: 8GB minimum, 16GB recommended
+- GPU: Optional but recommended for better performance
+- Storage: 500MB free space
+- Display: 1280x720 minimum resolution
+
 ## Prerequisites
 
 - Python 3.8+
 - Webcam
 - Well-lit environment
 - Yellow objects for detection (e.g., sticky notes, tennis balls)
+- CUDA-compatible GPU (optional, for improved performance)
+- Minimum 2GB free RAM for processing
 
 ## Installation
 
@@ -118,6 +129,23 @@ DROP_ZONES = [
    - Maintain hands in camera view
    - Improve lighting conditions
    - Fine-tune confidence values
+
+### Advanced Troubleshooting
+
+1. **Performance Issues**
+   - Check CPU/RAM usage in Task Manager
+   - Enable GPU acceleration in config.py
+   - Reduce frame resolution if needed
+
+2. **Installation Problems**
+   - Update pip: `python -m pip install --upgrade pip`
+   - Install Visual C++ Redistributable (Windows)
+   - Check Python version compatibility
+
+3. **Runtime Errors**
+   - Clear cache: `pip cache purge`
+   - Reinstall dependencies
+   - Check system logs
 
 ### Best Practices
 1. **Environment Setup**
