@@ -1,11 +1,15 @@
 import cv2
 import numpy as np
+import logging
 
 class ObjectDetector:
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("Initializing ObjectDetector")
         # Initialize basic color detection
         self.lower_bound = np.array([20, 100, 100])  # HSV color range for detection
         self.upper_bound = np.array([30, 255, 255])  # Example: yellow color
+        self.logger.debug("ObjectDetector initialized with default color range")
 
     def detect_objects(self, frame):
         # Convert to HSV color space
@@ -23,9 +27,12 @@ class ObjectDetector:
                 x, y, w, h = cv2.boundingRect(contour)
                 detections.append((x, y, w, h))
         
+        if detections:
+            self.logger.debug(f"Detected {len(detections)} objects")
         return detections
 
     def draw_detections(self, frame, detections, color=(0, 255, 0)):
         for x, y, w, h in detections:
             cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+        self.logger.debug(f"Drawing {len(detections)} object detections")
         return frame
