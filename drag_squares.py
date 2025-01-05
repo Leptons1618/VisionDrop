@@ -1,3 +1,6 @@
+from tensorflow_config import configure_tensorflow
+configure_tensorflow()  # Must be called before other imports
+
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -5,13 +8,19 @@ import logging
 from config import *
 from logging_config import setup_logging
 from collections import deque
+import os
+
+# Suppress TensorFlow warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 class SquareDragger:
     def __init__(self):
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
             min_detection_confidence=0.7,
-            max_num_hands=1
+            max_num_hands=1,
+            model_complexity=0  # Use lighter model for better performance
         )
         
         # Initialize squares with random positions
@@ -38,33 +47,66 @@ class SquareDragger:
         
         self.logger = logging.getLogger(__name__)
         self.logger.info("SquareDragger initialized with trail system")
+        
+        # Add pinch detection parameters
+        self.pinch_threshold = 0.04  # Increased threshold for more reliable detection
+        self.smoothing_factor = 0.5  # For smooth pinch detection
+        self.last_pinch_state = False
+        self.pinch_cooldown = 0
+        self.cooldown_frames = 5  # Frames to wait before allowing new pinch
 
     def is_pinching(self, hand_landmarks):
-        """Check if index and middle fingers are pinching"""
+        """Improved pinch detection with smoothing and additional fingers check"""
         if not hand_landmarks:
             return False
-            
+
+        if self.pinch_cooldown > 0:
+            self.pinch_cooldown -= 1
+            return self.last_pinch_state
+
+        # Get all relevant finger landmarks
         index_tip = hand_landmarks.landmark[8]
+        index_pip = hand_landmarks.landmark[6]  # Index finger PIP joint
         middle_tip = hand_landmarks.landmark[12]
-        
-        # Calculate distance between finger tips
-        distance = np.sqrt(
-            (index_tip.x - middle_tip.x)**2 + 
-            (index_tip.y - middle_tip.y)**2
+        middle_pip = hand_landmarks.landmark[10]  # Middle finger PIP joint
+        thumb_tip = hand_landmarks.landmark[4]
+
+        # Calculate distances
+        pinch_distance = np.sqrt(
+            (index_tip.x - thumb_tip.x)**2 + 
+            (index_tip.y - thumb_tip.y)**2
         )
-        
-        return distance < 0.03  # Threshold for pinch detection
+
+        # Check if fingers are extended (using PIP joints)
+        index_extended = index_tip.y < index_pip.y
+        middle_extended = middle_tip.y < middle_pip.y
+
+        # Determine pinch state with multiple conditions
+        current_pinch = (pinch_distance < self.pinch_threshold and 
+                        index_extended and middle_extended)
+
+        # Apply smoothing
+        smoothed_pinch = (current_pinch or 
+                         (self.last_pinch_state and pinch_distance < self.pinch_threshold * 1.2))
+
+        # Update state
+        if smoothed_pinch != self.last_pinch_state:
+            self.pinch_cooldown = self.cooldown_frames
+        self.last_pinch_state = smoothed_pinch
+
+        return smoothed_pinch
 
     def get_pinch_position(self, hand_landmarks, frame_shape):
-        """Get the midpoint between index and middle finger"""
+        """Improved pinch position calculation"""
         if not hand_landmarks:
             return None
-            
+
+        # Use thumb and index finger midpoint for better accuracy
+        thumb_tip = hand_landmarks.landmark[4]
         index_tip = hand_landmarks.landmark[8]
-        middle_tip = hand_landmarks.landmark[12]
-        
-        x = int((index_tip.x + middle_tip.x) * frame_shape[1] / 2)
-        y = int((index_tip.y + middle_tip.y) * frame_shape[0] / 2)
+
+        x = int((thumb_tip.x + index_tip.x) * frame_shape[1] / 2)
+        y = int((thumb_tip.y + index_tip.y) * frame_shape[0] / 2)
         
         return [x, y]
 
@@ -120,14 +162,26 @@ def main():
 
     dragger = SquareDragger()
 
+    # Add performance optimizations
+    cv2.setNumThreads(4)  # Optimize OpenCV threading
+    
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
 
+        # Process frame at half resolution for better performance
+        frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
         frame = cv2.flip(frame, 1)
+
+        # Convert to RGB only once
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb_frame.flags.writeable = False  # Optimization for MediaPipe
         results = dragger.hands.process(rgb_frame)
+        rgb_frame.flags.writeable = True
+
+        # Scale frame back to original size
+        frame = cv2.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT))
 
         # Draw squares first
         frame = dragger.draw_squares(frame)
