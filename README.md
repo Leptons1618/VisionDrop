@@ -5,26 +5,26 @@ A computer vision-based drag and drop interface using hand tracking and object d
 ## Features
 
 - Real-time hand tracking using MediaPipe
-- Object detection using TensorFlow
-- Virtual drop zones for object placement
-- Interactive visual feedback
+- Object detection using color-based tracking
+- Virtual drop zones with visual feedback
+- Interactive gesture-based interface
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- Webcam or camera device
-- GPU recommended for better performance
+- Python 3.8+
+- Webcam
+- Sufficient lighting for hand and object detection
 
 ## Installation
 
-1. Clone the repository:
+1.Clone the repository:
 
 ```bash
 git clone https://github.com/yourusername/VisionDrop.git
 cd VisionDrop
 ```
 
-1. Install dependencies:
+2.Install dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -32,30 +32,52 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run the main script:
+Run the main application:
 
 ```bash
 python vision_drag_drop.py
 ```
 
+### Controls
+
+- Use your hands naturally in front of the camera
+- Move objects to the highlighted drop zones
 - Press 'q' to quit the application
-- Use your hand to interact with detected objects
-- Green boxes indicate objects in drop zones
-- Red boxes indicate objects outside drop zones
-- Blue rectangles show valid drop zones
 
 ## Configuration
 
-The application includes configurable drop zones and detection parameters in the main script. Modify the following variables to adjust behavior:
+You can modify the following settings in `config.py`:
 
-- `drop_zone`: List of drop zone coordinates
-- `min_detection_confidence`: Adjust hand detection sensitivity
-- `min_tracking_confidence`: Adjust hand tracking reliability
+- Camera settings (resolution, camera index)
+- Hand detection sensitivity
+- Drop zone positions
+- Color definitions
 
-## License
+## Project Structure
 
-[Your chosen license]
+```
+VisionDrop/
+├── vision_drag_drop.py  # Main application
+├── hand_tracker.py      # Hand tracking module
+├── object_detector.py   # Object detection module
+├── config.py           # Configuration settings
+├── requirements.txt    # Project dependencies
+└── README.md          # Documentation
+```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- MediaPipe for hand tracking
+- OpenCV for computer vision capabilities
