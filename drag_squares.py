@@ -20,8 +20,18 @@ class SquareDragger:
         self.hands = self.mp_hands.Hands(
             min_detection_confidence=0.7,
             max_num_hands=1,
-            model_complexity=0  # Use lighter model for better performance
+            model_complexity=1,  # Increased complexity since we have GPU
+            min_tracking_confidence=0.5
         )
+        
+        # Enable CUDA acceleration for OpenCV if available
+        if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+            self.logger.info("CUDA acceleration enabled for OpenCV")
+            cv2.cuda_Device(0)  # Use first GPU
+        
+        # Add image dimensions for MediaPipe
+        self.image_width = FRAME_WIDTH
+        self.image_height = FRAME_HEIGHT
         
         # Initialize squares with random positions
         self.squares = []
@@ -151,6 +161,54 @@ class SquareDragger:
         
         return frame
 
+    def find_hands(self, frame):
+        """Process hand detection with image dimensions"""
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_rgb.flags.writeable = False
+        
+        # Add image dimensions to MediaPipe processing
+        results = self.hands.process(frame_rgb)
+        frame_rgb.flags.writeable = True
+        
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                # Add normalization rectangle for proper projection
+                self.mp_drawing.draw_landmarks(
+                    frame,
+                    hand_landmarks,
+                    self.mp_hands.HAND_CONNECTIONS,
+                    landmark_drawing_spec=self.mp_drawing.DrawingSpec(
+                        color=(0, 255, 0),
+                        thickness=2,
+                        circle_radius=2
+                    )
+                )
+        
+        return frame, results.multi_hand_landmarks
+
+    def process_frame(self, frame):
+        """GPU-accelerated frame processing"""
+        try:
+            # Convert frame to GPU memory
+            if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+                gpu_frame = cv2.cuda_GpuMat()
+                gpu_frame.upload(frame)
+                
+                # GPU accelerated operations
+                gpu_frame = cv2.cuda.resize(gpu_frame, (self.image_width, self.image_height))
+                gpu_frame = cv2.cuda.flip(gpu_frame, 1)
+                
+                # Download result back to CPU
+                frame = gpu_frame.download()
+            else:
+                frame = cv2.resize(frame, (self.image_width, self.image_height))
+                frame = cv2.flip(frame, 1)
+                
+            return frame
+        except Exception as e:
+            self.logger.warning(f"GPU processing failed, falling back to CPU: {e}")
+            return cv2.resize(frame, (self.image_width, self.image_height))
+
 def main():
     setup_logging()
     logger = logging.getLogger(__name__)
@@ -162,8 +220,9 @@ def main():
 
     dragger = SquareDragger()
 
-    # Add performance optimizations
-    cv2.setNumThreads(4)  # Optimize OpenCV threading
+    # Enable OpenCV CUDA optimization
+    cv2.setNumThreads(8)  # Increased for RTX 4050
+    cv2.ocl.setUseOpenCL(True)  # Enable OpenCL acceleration
     
     while cap.isOpened():
         ret, frame = cap.read()
@@ -171,8 +230,7 @@ def main():
             break
 
         # Process frame at half resolution for better performance
-        frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
-        frame = cv2.flip(frame, 1)
+        frame = dragger.process_frame(frame)
 
         # Convert to RGB only once
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -223,8 +281,8 @@ def main():
             dragger.trail_points.clear()
 
         # Display instructions
-        cv2.putText(frame, "Pinch to drag squares", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        # cv2.putText(frame, "Pinch to drag squares", (10, 30),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
         cv2.imshow('Square Dragger', frame)
 
