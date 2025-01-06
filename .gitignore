@@ -12,3 +12,5 @@ venv/
 env/
 
 .visiondrop/
+.visiondrop_gpu/
+.*/
