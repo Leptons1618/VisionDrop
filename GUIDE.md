@@ -5,7 +5,8 @@ VisionDrop is an interactive computer vision application that allows users to ma
 
 ## Key Features
 - Hand tracking in real-time
-- Object detection (default: yellow objects)
+- Object detection and tracking (YOLO11 + ByteTrack; HSV color fallback)
+- Pinch to grab, move, and release objects (debounced, filtered cursor)
 - Virtual drop zones
 - Visual feedback for interactions
 
@@ -13,17 +14,17 @@ VisionDrop is an interactive computer vision application that allows users to ma
 
 1. Environment Setup
 ```bash
-# Create a virtual environment
-python -m venv venv
+# Create a virtual environment (use Python 3.10-3.12)
+uv venv --python 3.12 .venv
 
 # Activate virtual environment
 # Windows:
-venv\Scripts\activate
+.venv\Scripts\activate
 # Linux/Mac:
-source venv/bin/activate
+source .venv/bin/activate
 
-# Install requirements
-pip install -r requirements.txt
+# Install the package
+pip install -e ".[dev]"
 ```
 
 2. Hardware Requirements
@@ -52,32 +53,39 @@ pip install -r requirements.txt
 ### Basic Usage
 1. Run the program:
 ```bash
-python vision_drag_drop.py
+python -m visiondrop
 ```
 
 2. You will see:
 - Your webcam feed
 - Blue rectangles (drop zones)
 - Hand tracking skeleton
-- Yellow object detection boxes
-- Quit instructions at the bottom
+- Detected objects with class, track ID, and confidence
+- A green line linking your pinch point to the object you are reaching for
+- FPS counter; latency percentiles with `--debug`
 
 ### Interaction Examples
 
 1. **Hand Detection**
    - Hold your hand up to the camera
    - You'll see a hand skeleton overlay
-   - A red dot marks the hand center
+   - A red dot marks the pinch point between thumb and index finger
 
 2. **Object Detection**
-   - Hold a yellow object in view
-   - Green boxes will appear around yellow objects
-   - Try using sticky notes or tennis balls
+   - Hold an everyday object in view (cup, bottle, phone, ...)
+   - Boxes appear with class, track ID, and confidence
+   - Move your pinch point near an object to link to it (green line)
 
-3. **Drop Zone Interaction**
+3. **Grab & Drop**
+   - Pinch thumb and index together over an object to grab it (yellow HELD box)
+   - The object follows your hand; brief occlusion does not drop it
+   - Open your hand to release
+
+4. **Drop Zone Interaction**
    - Move your hand into a blue rectangle
-   - The hand center dot turns green when in zone
-   - Practice moving between zones
+   - The pinch point turns green when in zone
+   - Release over a zone to score; the HUD shows score and misses
+   - The onboarding hint fades away after your first successful drop
 
 ## Common Use Cases
 
@@ -98,58 +106,64 @@ python vision_drag_drop.py
 ## Customization
 
 ### Modifying Colors
-Edit `config.py` to change detection colors:
+Edit `src/visiondrop/config.py` to change display colors:
 ```python
-# Example: Change yellow to red detection
-self.lower_bound = np.array([0, 100, 100])  # Red in HSV
-self.upper_bound = np.array([10, 255, 255])
+DEFAULT_COLORS = {
+    "red": (0, 0, 255),
+    "green": (0, 255, 0),
+    ...
+}
 ```
 
 ### Adjusting Drop Zones
-Edit `config.py` to modify zones:
+Edit `src/visiondrop/config.py` to modify zones:
 ```python
-DROP_ZONES = [
-    (100, 100, 300, 300),  # Zone 1: (x1, y1, x2, y2)
-    (400, 100, 600, 300)   # Zone 2
-]
+DEFAULT_DROP_ZONES = (
+    DropZone(100, 100, 420, 420, label="A"),
+    DropZone(500, 100, 820, 420, label="B"),
+)
 ```
 
 ## Advanced Configuration
 
+### Session Logging
+```bash
+python -m visiondrop --log logs/session.jsonl
+python -m visiondrop --condition dwell --log logs/session_dwell.jsonl
+python scripts/analyze_session.py logs/session.jsonl   # metrics + plot
+```
+
 ### Performance Tuning
 ```python
-# In config.py
-ENABLE_GPU = True
-PROCESSING_SCALE = 0.5  # Reduce for better performance
-TRACKING_PRECISION = 0.8  # Adjust tracking sensitivity
+# In src/visiondrop/config.py
+AppConfig(frame_width=1280, frame_height=720)   # Lower to 640x480 for speed
+
+# In src/visiondrop/config.py
+HandTrackingConfig(num_hands=1, min_detection_confidence=0.6)
 ```
 
 ### Custom Detection Profiles
 ```python
-# In config.py
-DETECTION_PROFILES = {
-    'high_precision': {
-        'confidence': 0.9,
-        'min_tracking_confidence': 0.9
-    },
-    'performance': {
-        'confidence': 0.7,
-        'min_tracking_confidence': 0.7
-    }
-}
+# In src/visiondrop/config.py
+HandTrackingConfig(
+    num_hands=2,
+    min_detection_confidence=0.9,       # high precision profile
+    min_hand_presence_confidence=0.9,
+    min_tracking_confidence=0.9,
+)
 ```
 
 ## Troubleshooting
 
 1. **No Camera Feed**
-   - Check CAMERA_INDEX in config.py
-   - Try different indices (0, 1, 2)
+   - Pass the camera index with `--source` (0, 1, 2, ...)
+   - Try a video file instead: `--source clip.mp4`
    - Verify webcam connection
 
 2. **Poor Object Detection**
    - Improve lighting
-   - Use brighter yellow objects
-   - Adjust HSV values in ObjectDetector
+   - Restrict classes: `--classes cup,bottle`
+   - For the color fallback, use brighter objects or adjust HSV values in `src/visiondrop/config.py`
 
 3. **Hand Tracking Issues**
    - Keep hands in camera view

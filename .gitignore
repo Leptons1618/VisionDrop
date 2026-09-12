@@ -2,10 +2,14 @@
 logs/
 *.log
 
+# Sample media (fetched with scripts/fetch_samples.py)
+samples/
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
 
 # Virtual Environment
 venv/
