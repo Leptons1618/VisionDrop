@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 from subprocess import check_output, CalledProcessError
-import pkg_resources
+from importlib.metadata import version as get_version, PackageNotFoundError
 
 def check_nvidia_smi():
     """Check NVIDIA GPU using nvidia-smi"""
@@ -99,9 +99,8 @@ def check_system_info():
     required_packages = ['tensorflow', 'torch', 'opencv-python', 'numpy']
     for package in required_packages:
         try:
-            version = pkg_resources.get_distribution(package).version
-            print(f"{package}: {version}")
-        except pkg_resources.DistributionNotFound:
+            print(f"{package}: {get_version(package)}")
+        except PackageNotFoundError:
             print(f"{package}: Not installed")
 
 def main():

@@ -47,8 +47,8 @@ sounddevice==0.5.1
 tensorboard==2.18.0
 tensorboard-data-server==0.7.2
 tensorflow==2.18.0
-tensorflow-io-gcs-filesystem==0.31.0
-tensorflow_intel==2.18.0
+tensorflow-io-gcs-filesystem==0.31.0; platform_machine != "arm64" or platform_system != "Darwin"
+tensorflow_intel==2.18.0; platform_system == "Windows"
 termcolor==2.5.0
 typing_extensions==4.12.2
 urllib3==2.3.0
