@@ -1,194 +1,147 @@
 # VisionDrop
 
-A computer vision-based drag and drop interface using hand tracking and object detection. This interactive application allows users to manipulate virtual objects using hand gestures in real-time.
+Touchless desktop interaction: a webcam tracks your hand, and a transparent overlay draws a cursor,
+gestures, and annotations on top of your real screen. No camera preview is shown — the camera is a sensor.
 
-## Features
+The project is mid-migration. The new engine lives in `src/visiondrop/`; the two original camera-window
+demos have moved to `legacy/`. The full research and roadmap are in [PLAN.md](PLAN.md).
 
-- Real-time hand tracking using MediaPipe
-- Object detection using color-based tracking (default: yellow objects)
-- Virtual drop zones with visual feedback
-- Interactive gesture-based interface
-- Logging system for debugging and monitoring
-- Customizable detection zones and colors
+## Status
 
-## System Requirements
+| Area | State |
+| --- | --- |
+| Interaction engine (features, filters, pinch FSM, cursor) | Implemented, 36 tests passing |
+| CLI (`run`, `replay`, `info`) | Implemented |
+| Click-through screen overlay (PyObjC) | Phase 2, not started |
+| OS action injection (Quartz) | Phase 3, not started |
+| Canvas, shape recognition, zoom/pan, OCR | Phases 4-5, not started |
+| Legacy demos | Moved to `legacy/`, unchanged |
 
-- Operating System: Windows 10/11, macOS 10.14+, or Linux
-- CPU: Intel Core i5/AMD Ryzen 5 or better
-- RAM: 8GB minimum, 16GB recommended
-- GPU: Optional but recommended for better performance
-- Storage: 500MB free space
-- Display: 1280x720 minimum resolution
+## Requirements
 
-## Prerequisites
-
-- Python 3.8+
+- macOS (the overlay, event injection, and OCR layers are macOS-only by design)
+- [uv](https://docs.astral.sh/uv/)
+- Python 3.11 (uv installs it automatically)
 - Webcam
-- Well-lit environment
-- Yellow objects for detection (e.g., sticky notes, tennis balls)
-- CUDA-compatible GPU (optional, for improved performance)
-- Minimum 2GB free RAM for processing
 
-## Installation
+macOS permissions (System Settings → Privacy & Security):
 
-1. Clone the repository:
+| Permission | Needed for | When |
+| --- | --- | --- |
+| Camera | Hand tracking | Now |
+| Accessibility | Injecting clicks and keys | Phase 3 |
+| Screen Recording | Magnifier and OCR | Phase 5 |
+
+Camera access is granted per app. If you run from a terminal, grant the terminal (or your IDE) access to
+the camera, or tracking will silently fail to open the device.
+
+## Install
+
 ```bash
-git clone https://github.com/yourusername/VisionDrop.git
+git clone https://github.com/Leptons1618/VisionDrop.git
 cd VisionDrop
+uv sync
 ```
 
-2. Create and activate virtual environment:
+`uv sync` creates `.venv` and installs the engine plus dev tools. The macOS extras (PyObjC, Vision, mss)
+are not needed yet; install them when the overlay work starts:
+
 ```bash
-# Create virtual environment
-python -m venv venv
-
-# Activate (Windows)
-venv\Scripts\activate
-# Activate (Linux/Mac)
-source venv/bin/activate
+uv sync --extra macos
 ```
 
-3. Install dependencies:
+## Run the engine
+
 ```bash
-pip install -r requirements.txt
+uv run visiondrop run                       # live engine, headless (no camera window)
+uv run visiondrop run --debug-window        # opt-in skeleton window with FPS/latency/pinch HUD
+uv run visiondrop run --record session.jsonl  # record landmarks for replay
+uv run visiondrop info                      # screen size and permission checklist
 ```
 
-## Usage
+Point with your index finger to move the cursor. Pinch thumb and index to press; hold and move to drag;
+a second pinch within 350 ms is a double click. An open, relaxed palm pauses the engine so a resting
+hand cannot trigger input. `Ctrl+C` stops.
 
-### Quick Start
-1. Run the application:
+Replay a recorded session deterministically (used by the tests and for tuning thresholds):
+
 ```bash
-python vision_drag_drop.py
+uv run visiondrop replay session.jsonl --verbose
 ```
 
-2. Interface Elements:
-- Webcam feed with hand tracking overlay
-- Blue rectangles indicating drop zones
-- Green boxes around detected yellow objects
-- Hand center marked with a red dot
-- Quit instructions at the bottom
+## Tests
 
-### Interaction Guide
-
-1. **Hand Tracking**
-   - Hold your hand up to the camera
-   - Watch the hand skeleton overlay appear
-   - Notice the red dot marking your hand's center
-
-2. **Object Detection**
-   - Present yellow objects to the camera
-   - Observe green boxes around detected objects
-   - Try different yellow items (sticky notes, tennis balls)
-
-3. **Drop Zone Interaction**
-   - Move your hand into the blue rectangles
-   - Watch the hand center dot turn green in zones
-   - Practice moving between different zones
-
-## Configuration
-
-### Camera Settings
-Edit `config.py` to adjust camera parameters:
-```python
-CAMERA_INDEX = 0  # Try 1 or 2 if camera not found
-FRAME_WIDTH = 640
-FRAME_HEIGHT = 480
+```bash
+uv run pytest
 ```
 
-### Detection Settings
-Modify color detection in `object_detector.py`:
-```python
-# Example: Change to detect red objects
-self.lower_bound = np.array([0, 100, 100])   # Red in HSV
-self.upper_bound = np.array([10, 255, 255])
-```
+Tests are camera-free. Synthetic hands exercise the feature extraction, and recorded or generated
+landmark streams replay through the engine, so gesture logic can be verified in CI.
 
-### Drop Zones
-Customize zones in `config.py`:
-```python
-DROP_ZONES = [
-    (100, 100, 300, 300),  # Zone 1: (x1, y1, x2, y2)
-    (400, 100, 600, 300)   # Zone 2
-]
-```
+## Project structure
 
-## Troubleshooting
-
-### Common Issues
-1. **No Camera Feed**
-   - Verify CAMERA_INDEX in config.py
-   - Check webcam connection
-   - Try different USB ports
-
-2. **Poor Detection**
-   - Ensure proper lighting
-   - Use brighter yellow objects
-   - Adjust HSV values in ObjectDetector
-
-3. **Hand Tracking Issues**
-   - Maintain hands in camera view
-   - Improve lighting conditions
-   - Fine-tune confidence values
-
-### Advanced Troubleshooting
-
-1. **Performance Issues**
-   - Check CPU/RAM usage in Task Manager
-   - Enable GPU acceleration in config.py
-   - Reduce frame resolution if needed
-
-2. **Installation Problems**
-   - Update pip: `python -m pip install --upgrade pip`
-   - Install Visual C++ Redistributable (Windows)
-   - Check Python version compatibility
-
-3. **Runtime Errors**
-   - Clear cache: `pip cache purge`
-   - Reinstall dependencies
-   - Check system logs
-
-### Best Practices
-1. **Environment Setup**
-   - Use consistent, bright lighting
-   - Avoid backlighting
-   - Minimize background movement
-
-2. **Camera Positioning**
-   - Mount at chest/head height
-   - Maintain 2-3 feet distance
-   - Use stable surface
-
-3. **Performance Tips**
-   - Close other camera applications
-   - Use dedicated GPU if available
-   - Keep background simple
-
-## Project Structure
 ```
 VisionDrop/
-├── vision_drag_drop.py  # Main application
-├── hand_tracker.py      # Hand tracking module
-├── object_detector.py   # Object detection module
-├── config.py           # Configuration settings
-├── logging_config.py   # Logging setup
-├── requirements.txt    # Dependencies
-└── README.md          # Documentation
+├── pyproject.toml            # uv project, console script, extras, dev tools
+├── src/visiondrop/
+│   ├── app.py                # CLI: run, replay, info
+│   ├── engine.py             # landmarks in -> cursor + gesture state out
+│   ├── capture.py            # background camera thread, latest-frame handoff
+│   ├── tracking.py           # MediaPipe wrapper (2D + world landmarks)
+│   ├── features.py           # scale-free hand features (pinch ratio, extension)
+│   ├── filters.py            # One Euro filter, EMA, velocity
+│   ├── gestures.py           # pinch FSM (hysteresis, debounce, drag, double click)
+│   ├── cursor.py             # active-box mapping, gain, freeze-on-click
+│   ├── telemetry.py          # FPS, latency, landmark record/replay
+│   └── config.py             # tunable thresholds and timings
+├── tests/                    # unit + replay tests, synthetic hand helpers
+├── legacy/
+│   ├── visiondrop_project/   # original demo: hand tracking + yellow object detection
+│   └── drag_squares_project/ # original demo: pinch-to-drag squares
+├── PLAN.md                   # research synthesis, architecture, roadmap
+├── requirements.txt          # dependencies for the legacy demos only
+├── GUIDE.md                  # legacy user guide
+└── README.md
 ```
 
-## Contributing
+## Legacy demos
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+The original OpenCV-window demos still work. They use their own dependency file and run from their own
+folders (their imports are flat):
+
+```bash
+uv python install 3.11
+uv venv --python 3.11
+uv pip install -r requirements.txt
+
+uv run --no-project --directory legacy/visiondrop_project python vision_drag_drop.py
+uv run --no-project --directory legacy/drag_squares_project python drag_squares.py
+uv run --no-project --directory legacy/drag_squares_project python gpu_check.py
+```
+
+Notes:
+
+- `legacy/visiondrop_project` tracks the hand skeleton and detects yellow objects over a camera feed.
+- `legacy/drag_squares_project` drags colored squares with a pinch and draws a motion trail.
+- On Apple Silicon, `requirements.txt` marks the NVIDIA-only pins as platform-conditional, so it resolves
+  on arm64 macOS. TensorFlow is optional and falls back to CPU.
+- See [GUIDE.md](GUIDE.md) for the legacy user guide.
+
+## Design highlights
+
+- **Scale-free gestures.** Pinch distance is divided by hand size (wrist to index MCP), so thresholds do
+  not change with camera distance, and finger extension is measured from the wrist so it survives hand
+  rotation. The old demo's fixed 0.04 threshold and image-space y-comparison were its two failure modes.
+- **Hysteresis and debounce.** Two pinches thresholds plus frame confirmation and a release cooldown
+  prevent flicker around the threshold.
+- **One Euro filter.** Smooths the cursor while keeping lag low (target under 60 ms), following
+  Casiez et al., CHI 2012.
+- **Freeze on click.** The cursor holds still when a click fires so a selection lands where you aimed.
+- **Explicit idle.** An open palm pauses input, addressing the Midas touch problem.
+- **Replayable.** The engine never calls wall-clock time, so every gesture decision can be replayed from
+  a recording and regression-tested.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- MediaPipe for hand tracking capabilities
-- OpenCV for computer vision functionality
-- Contributors and maintainers
+MIT. Third-party components keep their own licenses; see PLAN.md section 3 for the licensing notes on the
+research and open-source references.
