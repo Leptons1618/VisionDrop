@@ -1,7 +1,7 @@
 import numpy as np
 
-from tests.helpers import make_hand
-from tests.test_engine import make_engine
+from helpers import make_hand
+from test_engine import make_engine
 from visiondrop.gestures import PinchEventKind
 from visiondrop.telemetry import JsonlRecorder, load_recording
 from visiondrop.tracking import FrameObservation, HandObservation

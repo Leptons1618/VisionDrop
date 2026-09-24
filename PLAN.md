@@ -1,12 +1,19 @@
 # VisionDrop 2.0 — Research & Implementation Plan
 
-> Status: **proposal, not implemented**. This document is the output of a literature + open-source review
-> conducted before any code is written. It supersedes the two current demos as the direction of the project.
+> **Status (2026-09-24): mixed research record and superseded proposal.** Sections 1–4, 9,
+> and 12 retain the product goal, root-cause analysis, research synthesis, evaluation design, and
+> design principles. Sections 5–8, 11, and 13 describe the original Python/PyObjC implementation
+> proposal and roadmap and are superseded by [docs/SRS.md](docs/SRS.md),
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and
+> [ADR 0001](docs/adr/0001-implementation-language.md). They are not a record of completed work.
 >
-> Progress (2026-09-22): Phase 0 and Phase 1 are implemented in `src/visiondrop/` — capture, MediaPipe
-> wrapper, scale-free features, One Euro filters, hysteretic pinch FSM, cursor mapping with freeze-on-click,
-> telemetry with record/replay, and a 36-test camera-free suite. Phase 2 (PyObjC overlay) is next.
-> The original demos now live under `legacy/`.
+> **Current progress:** the Swift package now contains geometry conversion, two-dimensional hand
+> landmarks and features, One Euro filtering, pinch and idle state machines, pointer mapping,
+> configuration, AVFoundation capture, Vision tracking, a landmark-only v2 recorder, deterministic
+> replay, and a headless CLI. Core and Vision mapping tests plus a synthetic replay fixture are
+> present. There is still no app target, overlay, event injection, Canvas, Lens, real evaluation
+> corpus, or demonstrated M0–M7 milestone exit criterion. The Python prototype remains under
+> `src/visiondrop/`; the original demos are under `legacy/`.
 
 ---
 
@@ -382,5 +389,10 @@ packaging step early so permission prompts behave in dev too.
 
 ## 13. Immediate next step
 
-Approve the plan and answer the open questions in §11. Then Phase 0 + Phase 1 begin: a `pyproject.toml`,
-a record/replay harness, and a rewritten pinch/feature/filter pipeline with tests — before any overlay work.
+The immediate next step is to complete and verify M1 before starting M3: capture representative real
+v2 landmark sessions, explicitly convert any retained prototype material to v2, and establish the
+labelled evaluation corpus and Vision-versus-MediaPipe comparison. The Swift reader rejects prototype
+v1, so conversion must be a deliberate, validated data step rather than an implicit compatibility path.
+Do not treat the synthetic fixture or unit suite as the M1/M2 evaluation, and do not mark the original
+Phase 0/1 acceptance criteria complete. After that evidence exists, implement the planned app shell and
+click-through overlay.
