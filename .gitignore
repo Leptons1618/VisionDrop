@@ -14,3 +14,12 @@ env/
 .visiondrop/
 .visiondrop_gpu/
 .*/
+# Swift
+.build/
+.swiftpm/
+*.xcodeproj
+DerivedData/
+
+# The catch-all `.*/` above hides dot-directories; CI config must be tracked.
+!.github/
+!.github/**

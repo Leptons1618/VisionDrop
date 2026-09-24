@@ -28,7 +28,6 @@ ml-dtypes==0.4.1
 namex==0.0.8
 numpy==1.26.4
 opencv-contrib-python==4.10.0.84
-opencv-python==4.10.0.84
 opt_einsum==3.4.0
 optree==0.13.1
 packaging==24.2

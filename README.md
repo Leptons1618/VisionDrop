@@ -1,41 +1,112 @@
 # VisionDrop
 
-Touchless desktop interaction: a webcam tracks your hand, and a transparent overlay draws a cursor,
-gestures, and annotations on top of your real screen. No camera preview is shown — the camera is a sensor.
+VisionDrop 2.0 is planned as a touchless desktop interface: a webcam tracks your hand and a
+transparent overlay will draw a cursor, gestures, and annotations over the real screen. No camera
+preview is intended in the product; the camera is a sensor. The current implementation status is below.
 
-The project is mid-migration. The new engine lives in `src/visiondrop/`; the two original camera-window
-demos have moved to `legacy/`. The full research and roadmap are in [PLAN.md](PLAN.md).
+**VisionDrop 2.0 is under active Swift implementation.** The current repository contains the package,
+headless CLI, camera/Vision sensing, a landmark-only recorder, and a replayable interaction engine. The
+menu-bar app, click-through overlay, event injection, Canvas, and Lens are not implemented. The Python
+code in `src/visiondrop/` is a runnable prototype, not the product implementation. See
+[the documents below](#documentation).
+
+The Python + MediaPipe implementation assumed by the original research plan is superseded by Swift and
+Apple frameworks ([ADR 0001](docs/adr/0001-implementation-language.md)).
+
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [docs/SRS.md](docs/SRS.md) | Requirements specification: functional, non-functional, interfaces, verification, release plan |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module layout, concurrency model, coordinate contract, platform hazards, coding standards |
+| [docs/adr/0001-implementation-language.md](docs/adr/0001-implementation-language.md) | Why Swift and Apple frameworks rather than Rust, Go, C++ or Python |
+| [PLAN.md](PLAN.md) | Interaction research: literature review, gesture vocabulary, evaluation design. Sections 5–8, 11, and 13 are superseded. |
 
 ## Status
 
-| Area | State |
+| Milestone | Current state |
 | --- | --- |
-| Interaction engine (features, filters, pinch FSM, cursor) | Implemented, 36 tests passing |
-| CLI (`run`, `replay`, `info`) | Implemented |
-| Click-through screen overlay (PyObjC) | Phase 2, not started |
-| OS action injection (Quartz) | Phase 3, not started |
-| Canvas, shape recognition, zoom/pan, OCR | Phases 4-5, not started |
-| Legacy demos | Moved to `legacy/`, unchanged |
+| M0 — Skeleton | **Partial.** The Swift package and headless CI are present. The menu-bar app, Developer ID signing, and notarization are not. |
+| M1 — Sensing | **Partial.** AVFoundation capture, Vision tracking, and landmark-only JSONL record/replay are present. Video recording, a real evaluation corpus, and the tracker A/B are not. |
+| M2 — Engine | **Partial.** Geometry, features, filtering, pinch/idle state machines, pointer mapping, configuration, and deterministic replay are implemented. The milestone's evaluation exit criteria have not been demonstrated. |
+| M3 — Overlay | Not implemented. There is no click-through overlay, cursor renderer, HUD, or app target. |
+| M4 — Control | Not implemented. The engine emits logical gesture events; it does not inject OS events or enforce the planned injection interlocks. |
+| M5–M7 — Canvas, Lens, evaluation | Not implemented. |
+
+Current limitations:
+
+- There is no shipping `.app`, overlay, event injection, Canvas, or Lens.
+- CI enforces an 85% line-coverage floor for `VisionDropCore`; this README does not publish a current measured percentage.
+- The committed replay fixture is synthetic. The real labelled evaluation corpus, pinch-F1 result, false-click measurement, and Vision-versus-MediaPipe A/B do not exist yet.
+- Swift recording format v2 is not backward-compatible with the Python prototype's headerless v1 files.
+  Version 1 is rejected; converting retained recordings is a separate, explicit data step and no
+  converter is currently implemented.
+
+The Python prototype in `src/visiondrop/` remains runnable. Its pinch detector includes MediaPipe's depth
+component in every distance while its test fixtures set depth to zero, so a firmly closed pinch can read
+as open in live use. The Swift landmark type excludes depth (SRS CON-5, ADR 0001 §1.2).
+
+### Measured so far
+
+| | |
+| --- | --- |
+| Engine processing | 10-17 µs/frame against a 1 ms budget (SRS PERF-4) |
+| Vision hand pose inference | 8-21 ms, mean ~15 ms |
+| Built-in FaceTime camera | **30 fps maximum at every resolution it offers** — no 60 fps mode |
+
+That last one matters: it puts ~33 ms of camera latency into a 60 ms motion-to-photon budget, so
+the target is now split by camera capability (SRS PERF-1a/1b) rather than assumed.
 
 ## Requirements
 
-- macOS (the overlay, event injection, and OCR layers are macOS-only by design)
-- [uv](https://docs.astral.sh/uv/)
-- Python 3.11 (uv installs it automatically)
-- Webcam
+- macOS 15 or later, on Apple silicon for the supported configuration
+- Swift 6 toolchain
+- A webcam for recording/tracking
+- [uv](https://docs.astral.sh/uv/) and Python 3.11, for the Python prototype only
 
 macOS permissions (System Settings → Privacy & Security):
 
 | Permission | Needed for | When |
 | --- | --- | --- |
 | Camera | Hand tracking | Now |
-| Accessibility | Injecting clicks and keys | Phase 3 |
-| Screen Recording | Magnifier and OCR | Phase 5 |
+| Accessibility | Injecting clicks and keys | M4 |
+| Screen Recording | Magnifier and OCR | M6 |
 
-Camera access is granted per app. If you run from a terminal, grant the terminal (or your IDE) access to
-the camera, or tracking will silently fail to open the device.
+Permissions are granted per code signature, not per binary. Running from a terminal inherits the
+terminal's grant; a future signed app bundle would have its own. `swift run visiondrop-cli info` lists
+the engine defaults, permission categories, and cameras it can enumerate; it does not request or change
+permissions.
 
-## Install
+## Build and run (Swift)
+
+Requires macOS 15+ and the Swift 6 toolchain on an Apple silicon Mac.
+
+```bash
+swift build
+swift test
+swift run visiondrop-cli info
+
+# Capture a landmark-only v2 recording. The CLI supports --seconds, --device,
+# and --no-mirror; run `visiondrop-cli --help` for the current syntax.
+swift run visiondrop-cli record session.jsonl --seconds 20
+swift run visiondrop-cli replay session.jsonl --verbose
+```
+
+The current CI workflow runs these checks on `macos-15`:
+
+```bash
+swift build -Xswiftc -warnings-as-errors
+swift format lint --strict --recursive Sources Tests
+swift test --enable-code-coverage
+python3 Scripts/coverage.py --minimum 85
+./Scripts/check-fixtures.sh
+```
+
+`record` needs Camera permission. Because macOS binds permissions to a code signature, a binary run from
+a terminal inherits the terminal's grant. The planned signed app bundle would have its own identity;
+that app has not been implemented.
+
+## The Python prototype
 
 ```bash
 git clone https://github.com/Leptons1618/VisionDrop.git
@@ -43,14 +114,15 @@ cd VisionDrop
 uv sync
 ```
 
-`uv sync` creates `.venv` and installs the engine plus dev tools. The macOS extras (PyObjC, Vision, mss)
-are not needed yet; install them when the overlay work starts:
+`uv sync` creates `.venv` and installs the prototype plus its test tools. PyObjC is optional for the
+prototype's screen-size lookup; when it is absent, the prototype uses a 1920×1080 fallback. There is no
+Python overlay implementation, so the optional `macos` extra is not a current product prerequisite:
 
 ```bash
 uv sync --extra macos
 ```
 
-## Run the engine
+### Running the prototype
 
 ```bash
 uv run visiondrop run                       # live engine, headless (no camera window)
@@ -69,77 +141,79 @@ Replay a recorded session deterministically (used by the tests and for tuning th
 uv run visiondrop replay session.jsonl --verbose
 ```
 
-## Tests
+### Prototype tests
 
 ```bash
 uv run pytest
 ```
 
-Tests are camera-free. Synthetic hands exercise the feature extraction, and recorded or generated
-landmark streams replay through the engine, so gesture logic can be verified in CI.
+Camera-free, but see the caveat in Status: the fixtures are two-dimensional while the live path is
+three-dimensional, so the prototype tests pass over a defect they cannot express.
 
 ## Project structure
 
 ```
 VisionDrop/
-├── pyproject.toml            # uv project, console script, extras, dev tools
-├── src/visiondrop/
-│   ├── app.py                # CLI: run, replay, info
-│   ├── engine.py             # landmarks in -> cursor + gesture state out
-│   ├── capture.py            # background camera thread, latest-frame handoff
-│   ├── tracking.py           # MediaPipe wrapper (2D + world landmarks)
-│   ├── features.py           # scale-free hand features (pinch ratio, extension)
-│   ├── filters.py            # One Euro filter, EMA, velocity
-│   ├── gestures.py           # pinch FSM (hysteresis, debounce, drag, double click)
-│   ├── cursor.py             # active-box mapping, gain, freeze-on-click
-│   ├── telemetry.py          # FPS, latency, landmark record/replay
-│   └── config.py             # tunable thresholds and timings
-├── tests/                    # unit + replay tests, synthetic hand helpers
-├── legacy/
-│   ├── visiondrop_project/   # original demo: hand tracking + yellow object detection
-│   └── drag_squares_project/ # original demo: pinch-to-drag squares
-├── PLAN.md                   # research synthesis, architecture, roadmap
-├── requirements.txt          # dependencies for the legacy demos only
-├── GUIDE.md                  # legacy user guide
-└── README.md
+├── Package.swift             # Swift package: Core, Kit, CLI, and test targets
+├── Sources/
+│   ├── VisionDropCore/       # pure engine logic and v2 JSONL codec
+│   ├── VisionDropKit/        # AVFoundation capture and Vision hand tracking
+│   └── visiondrop-cli/       # info, landmark-only record, deterministic replay
+├── Tests/
+│   ├── VisionDropCoreTests/  # engine, geometry, recording, synthetic replay
+│   ├── VisionDropKitTests/   # Vision joint mapping and handedness geometry
+│   └── Fixtures/             # committed v2 JSONL replay fixtures
+├── Scripts/                  # coverage and fixture gates
+├── .github/workflows/        # headless macOS CI
+├── docs/                     # SRS, architecture, ADR
+├── tools/lab/                # Python prototype tests and v2 fixture generator
+├── src/visiondrop/           # runnable Python/MediaPipe prototype (not Swift product code)
+├── legacy/                   # original OpenCV-window demos; unmaintained
+├── pyproject.toml            # uv project for the Python prototype
+├── GUIDE.md                  # legacy demo guide
+└── PLAN.md                   # research plus superseded proposal sections
 ```
+
+There is no `App/` target or Swift source directory for the proposed overlay, control, Canvas, or Lens
+layers yet. `docs/ARCHITECTURE.md` distinguishes that planned design from the present source layout.
 
 ## Legacy demos
 
-The original OpenCV-window demos still work. They use their own dependency file and run from their own
-folders (their imports are flat):
+The original OpenCV-window demos are historical examples and are not part of the Swift product. They use
+their root `requirements.txt` and must run from their own directories because their imports are flat:
 
 ```bash
 uv python install 3.11
 uv venv --python 3.11
 uv pip install -r requirements.txt
 
-uv run --no-project --directory legacy/visiondrop_project python vision_drag_drop.py
-uv run --no-project --directory legacy/drag_squares_project python drag_squares.py
-uv run --no-project --directory legacy/drag_squares_project python gpu_check.py
+uv run --no-project --python "$PWD/.venv/bin/python" \
+  --directory legacy/visiondrop_project python vision_drag_drop.py
+uv run --no-project --python "$PWD/.venv/bin/python" \
+  --directory legacy/drag_squares_project python drag_squares.py
+uv run --no-project --python "$PWD/.venv/bin/python" \
+  --directory legacy/drag_squares_project python gpu_check.py
 ```
 
 Notes:
 
 - `legacy/visiondrop_project` tracks the hand skeleton and detects yellow objects over a camera feed.
 - `legacy/drag_squares_project` drags colored squares with a pinch and draws a motion trail.
-- On Apple Silicon, `requirements.txt` marks the NVIDIA-only pins as platform-conditional, so it resolves
-  on arm64 macOS. TensorFlow is optional and falls back to CPU.
+- On Apple silicon, `requirements.txt` excludes the NVIDIA-only TensorFlow packages; the demo catches
+  unavailable TensorFlow GPU setup and continues on CPU.
 - See [GUIDE.md](GUIDE.md) for the legacy user guide.
 
-## Design highlights
+## Implemented design highlights
 
-- **Scale-free gestures.** Pinch distance is divided by hand size (wrist to index MCP), so thresholds do
-  not change with camera distance, and finger extension is measured from the wrist so it survives hand
-  rotation. The old demo's fixed 0.04 threshold and image-space y-comparison were its two failure modes.
-- **Hysteresis and debounce.** Two pinches thresholds plus frame confirmation and a release cooldown
-  prevent flicker around the threshold.
-- **One Euro filter.** Smooths the cursor while keeping lag low (target under 60 ms), following
-  Casiez et al., CHI 2012.
-- **Freeze on click.** The cursor holds still when a click fires so a selection lands where you aimed.
-- **Explicit idle.** An open palm pauses input, addressing the Midas touch problem.
-- **Replayable.** The engine never calls wall-clock time, so every gesture decision can be replayed from
-  a recording and regression-tested.
+- **2D landmarks.** Swift feature computation has no MediaPipe depth component to contaminate distances.
+- **Scale-free pinch.** Pinch distance is divided by hand size; tests cover scale, translation, and
+  rotation invariance.
+- **Hysteresis and debounce.** Two thresholds, frame confirmation, and release cooldown suppress chatter.
+- **One Euro filter.** Smooths the pointer using an explicit per-frame timestamp.
+- **Freeze on click.** The pointer holds still when a logical click fires.
+- **Explicit idle.** A resting open palm suppresses gesture events.
+- **Replayable.** The engine accepts explicit timestamps and has no wall-clock dependency. Current CI
+  protects one synthetic v2 fixture, not a real evaluation corpus.
 
 ## License
 

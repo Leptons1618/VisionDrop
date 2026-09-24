@@ -1,4 +1,4 @@
-from tests.helpers import make_hand
+from helpers import make_hand
 from visiondrop.config import EngineConfig
 from visiondrop.engine import Engine
 from visiondrop.gestures import PinchEventKind
@@ -76,3 +76,36 @@ def test_second_hand_with_lower_score_is_ignored():
     state = engine.process(FrameObservation(1.0, (noise, primary)))
     assert state.features is not None
     assert state.features.pinch_ratio < 0.2
+
+
+def test_hand_loss_resets_velocity_for_reacquisition():
+    engine = make_engine()
+    first_hand = HandObservation(make_hand("pinch"), None, "Right", 0.95)
+    moved_hand = HandObservation(make_hand("pinch", rotation_deg=20.0), None, "Right", 0.95)
+    first = engine.process(FrameObservation(0.0, (first_hand,)))
+    moved = engine.process(FrameObservation(1 / 30.0, (moved_hand,)))
+    assert moved.velocity > first.velocity
+
+    engine.process(empty(2 / 30.0))
+    reacquired = engine.process(observation("pinch", 3 / 30.0))
+
+    assert reacquired.velocity == 0.0
+
+
+def test_click_to_idle_emits_no_gesture_event():
+    engine = make_engine()
+    timestamp = 0.0
+    events = []
+    for pose in ["point"] * 3 + ["pinch"] * 6 + ["point"] * 4:
+        events.extend(engine.process(observation(pose, timestamp)).events)
+        timestamp += 1 / 30.0
+
+    click_count = sum(event is PinchEventKind.CLICK for event in events)
+    idle_states = [
+        engine.process(observation("open", timestamp + index / 30.0))
+        for index in range(10)
+    ]
+    assert click_count == 1
+    assert all(not state.events for state in idle_states)
+    assert idle_states[-1].idle
+    assert idle_states[-1].pinch is None

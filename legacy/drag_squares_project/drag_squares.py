@@ -4,6 +4,7 @@ configure_tensorflow()  # Must be called before other imports
 import cv2
 import numpy as np
 import mediapipe as mp
+import mediapipe.drawing as mp_drawing
 import logging
 from config import *
 from logging_config import setup_logging
@@ -16,7 +17,9 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 class SquareDragger:
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
         self.mp_hands = mp.solutions.hands
+        self.mp_drawing = mp_drawing
         self.hands = self.mp_hands.Hands(
             min_detection_confidence=0.7,
             max_num_hands=1,
@@ -55,8 +58,6 @@ class SquareDragger:
         self.trail_alpha = 0.6  # Starting opacity
         self.trail_fade = 0.95  # Fade factor per point
         
-        self.logger = logging.getLogger(__name__)
-        self.logger.info("SquareDragger initialized with trail system")
         
         # Add pinch detection parameters
         self.pinch_threshold = 0.04  # Increased threshold for more reliable detection
