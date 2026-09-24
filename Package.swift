@@ -7,9 +7,9 @@ let package = Package(
     name: "VisionDrop",
     platforms: [.macOS(.v15)],
     products: [
-        .library(name: "VisionDropCore", targets: ["VisionDropCore"]),
         .library(name: "VisionDropKit", targets: ["VisionDropKit"]),
         .executable(name: "visiondrop-cli", targets: ["visiondrop-cli"]),
+        .executable(name: "visiondrop-app", targets: ["visiondrop-app"]),
     ],
     targets: [
         // Pure logic. No AppKit, no Vision, no I/O, no wall-clock time.
@@ -26,6 +26,14 @@ let package = Package(
         // Headless replay / bench / info, for CI (SRS REC-7).
         .executableTarget(
             name: "visiondrop-cli",
+            dependencies: ["VisionDropCore", "VisionDropKit"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+
+        // Native menu-bar shell. The live camera → Vision → engine loop lives
+        // here; the overlay and control layers remain separate increments.
+        .executableTarget(
+            name: "visiondrop-app",
             dependencies: ["VisionDropCore", "VisionDropKit"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

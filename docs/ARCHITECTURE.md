@@ -15,7 +15,7 @@ hazards discovered during research, testing strategy, and the standards the code
 
 ### 1.1 Present source layout
 
-The repository currently has two library targets, one executable target, and two test targets. This is
+The repository currently has two library targets, two executable targets, and two test targets. This is
 the complete Swift source layout; it is not the finished VisionDrop 2.0 module graph:
 
 ```
@@ -33,7 +33,8 @@ VisionDrop/
 │   │   ├── Engine.swift
 │   │   └── Configuration.swift
 │   ├── VisionDropKit/           # Camera/ and Tracking/ only
-│   └── visiondrop-cli/          # info, landmark-only record, deterministic replay
+│   ├── visiondrop-cli/          # info, landmark-only record, deterministic replay
+│   └── visiondrop-app/          # menu-bar shell and live camera → Vision → engine loop
 ├── Tests/
 │   ├── VisionDropCoreTests/
 │   ├── VisionDropKitTests/      # joint mapping and handedness geometry
@@ -79,16 +80,14 @@ The present pure-logic core contains:
 `HandLandmarks` is where CON-5 is enforced: a landmark is a 2D point and a confidence, so feature
 code cannot accidentally consume MediaPipe's depth term. `HandJoint` names the 21 joints rather than
 requiring callers to use numeric indexes; the Vision mapping is implemented and tested in Kit.
-
 ### 1.4 Kit and the app target
 
 `VisionDropKit` presently contains AVFoundation `CameraSource` and `VisionHandTracker` behind
-`HandTracking`. The headless CLI directly sequences capture, inference, recording, and replay; the
-three-context actor/main-actor pipeline described in §2 is the planned product wiring, not the present
-runtime topology.
-
-The thin proposed `App/` target does not exist. There is currently no menu bar, settings UI, onboarding,
-overlay, event injector, Canvas, or Lens implementation.
+`HandTracking`. The headless CLI directly sequences capture, inference, recording, and replay. The
+`visiondrop-app` target is a `@MainActor` menu-bar shell: it displays camera permission and device
+counts, can request camera access, and runs a cancellable camera → Vision → engine loop off the main
+actor. The three-context actor/main-actor pipeline described in §2, the overlay, event injector,
+settings UI, onboarding, Canvas, and Lens remain planned.
 ---
 
 ## 2. Concurrency model
@@ -235,9 +234,8 @@ release checklist and are re-verified on every macOS update (R5).
 | --- | --- |
 | Language | Swift 6 language mode in the package; warnings-as-errors build in CI |
 | Minimum OS | macOS 15.0 |
-| Build | Swift Package Manager. The planned app target would use an Xcode project, which is not present. |
+| Build | Swift Package Manager. The `visiondrop-app` executable and live tracking loop are present; signing, notarization, and an Xcode app project remain. |
 | Tests | Swift Testing (`@Test` / `#expect`) |
-| Format | `swift-format`; config committed and strict recursive lint runs in CI |
 | Lint | No SwiftLint configuration or SwiftLint step is currently present. |
 
 ### 6.2 Conventions

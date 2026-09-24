@@ -20,7 +20,8 @@ pinch state machine, cursor mapping, and JSONL record/replay. The platform-facin
 injection, Canvas, magnifier, and OCR were then unwritten.
 
 The Swift direction is now partially implemented: the package includes a pure engine, deterministic
-v2 replay, AVFoundation capture, and Vision tracking. There is still no app target, overlay, event
+v2 replay, AVFoundation capture, Vision tracking, a headless CLI, and a menu-bar app shell with a
+cancellable live camera → Vision → engine loop. There is still no click-through overlay, event
 injection, Canvas, Lens, signed distribution, or completed evaluation corpus. This ADR records the
 accepted stack decision; it is not evidence that those remaining surfaces are implemented.
 
