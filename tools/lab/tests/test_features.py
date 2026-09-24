@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from tests.helpers import make_hand
+from helpers import make_hand
 from visiondrop.features import HandFeatures, hand_scale, pinch_ratio
 
 

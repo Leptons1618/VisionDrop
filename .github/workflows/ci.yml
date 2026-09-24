@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # Every check here is headless: no camera, no display, no TCC permission
+    # (SRS MNT-1). That is the property the Core/Kit split exists to protect.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build -Xswiftc -warnings-as-errors
+
+      - name: Lint formatting
+        run: swift format lint --strict --recursive Sources Tests
+
+      - name: Test
+        run: swift test --enable-code-coverage
+
+      - name: Coverage gate
+        run: python3 Scripts/coverage.py --minimum 85
+
+      # The regression gate (SRS §7.2). Replaying the fixtures through the
+      # built CLI exercises the file path end to end, not just the in-memory
+      # codec, and is where a change in gesture behaviour shows up.
+      - name: Replay fixtures
+        run: |
+          set -euo pipefail
+          for fixture in Tests/Fixtures/*.jsonl; do
+            echo "── $fixture"
+            swift run -c release visiondrop-cli replay "$fixture" --json
+          done
+
+      - name: Check expected events
+        run: Scripts/check-fixtures.sh

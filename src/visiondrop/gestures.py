@@ -52,9 +52,9 @@ class PinchFSM:
         self._candidate_frames = 0
         self._press_ts: float | None = None
         self._press_pos: tuple[float, float] | None = None
-        self._last_press_ts: float | None = None
+        self._last_click_release_ts: float | None = None
+        self._double_click_candidate = False
         self._cooldown_until = 0.0
-        self._suppress_click = False
 
     @property
     def closed(self) -> bool:
@@ -72,9 +72,9 @@ class PinchFSM:
         self._candidate_frames = 0
         self._press_ts = None
         self._press_pos = None
-        self._last_press_ts = None
+        self._last_click_release_ts = None
+        self._double_click_candidate = False
         self._cooldown_until = 0.0
-        self._suppress_click = False
 
     def update(
         self,
@@ -86,7 +86,7 @@ class PinchFSM:
 
         if ts_ms >= self._cooldown_until:
             threshold = self.config.exit_ratio if self._closed else self.config.enter_ratio
-            desired = ratio <= threshold
+            desired = ratio < threshold if self._closed else ratio <= threshold
 
             if desired == self._candidate:
                 self._candidate_frames += 1
@@ -108,7 +108,7 @@ class PinchFSM:
         # closed pinch. Otherwise the midpoint between the fingertips jumps as
         # the fingers open, and the release debounce would read that jump as a
         # drag.
-        still_closed = self._closed and ratio <= self.config.exit_ratio
+        still_closed = self._closed and ratio < self.config.exit_ratio
         if still_closed and not self._dragging and self._press_pos is not None:
             dx = position[0] - self._press_pos[0]
             dy = position[1] - self._press_pos[1]
@@ -134,32 +134,32 @@ class PinchFSM:
     ) -> list[PinchEventKind]:
         self._press_ts = ts_ms
         self._press_pos = position
-
-        if (
-            self._last_press_ts is not None
-            and ts_ms - self._last_press_ts <= self.config.double_click_ms
-        ):
-            self._last_press_ts = None
-            self._suppress_click = True
-            return [PinchEventKind.PRESS, PinchEventKind.DOUBLE_CLICK]
-
-        self._last_press_ts = ts_ms
-        self._suppress_click = False
+        self._double_click_candidate = (
+            self._last_click_release_ts is not None
+            and ts_ms - self._last_click_release_ts <= self.config.double_click_ms
+        )
         return [PinchEventKind.PRESS]
 
     def _on_release(self, ts_ms: float) -> list[PinchEventKind]:
         events: list[PinchEventKind] = []
         if self._dragging:
             events.append(PinchEventKind.DRAG_END)
-        elif not self._suppress_click:
+            self._last_click_release_ts = None
+            self._double_click_candidate = False
+        elif self._double_click_candidate:
+            events.append(PinchEventKind.DOUBLE_CLICK)
+            self._last_click_release_ts = None
+            self._double_click_candidate = False
+        else:
             events.append(PinchEventKind.CLICK)
+            self._last_click_release_ts = ts_ms
 
         self._dragging = False
-        self._suppress_click = False
         self._press_ts = None
         self._press_pos = None
         self._cooldown_until = ts_ms + self.config.cooldown_ms
         return events
+
 
 
 def is_idle_pose(

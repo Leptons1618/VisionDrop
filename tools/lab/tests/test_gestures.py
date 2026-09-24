@@ -3,7 +3,7 @@ import pytest
 from visiondrop.config import PinchConfig
 from visiondrop.gestures import PinchEventKind, PinchFSM, is_idle_pose
 from visiondrop.features import HandFeatures
-from tests.helpers import make_hand
+from helpers import make_hand
 
 FRAME_MS = 1000.0 / 30.0
 
@@ -73,6 +73,58 @@ def test_two_slow_clicks_are_not_a_double_click():
     fsm = PinchFSM()
     ratios = [1.2, 0.4, 0.4, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 0.4, 0.4, 1.2, 1.2]
     events = events_for(feed(fsm, ratios))
+    assert events.count(PinchEventKind.CLICK) == 2
+    assert PinchEventKind.DOUBLE_CLICK not in events
+
+
+def test_second_press_drag_does_not_emit_double_click():
+    fsm = PinchFSM()
+    events = events_for(feed(fsm, [1.2, 0.4, 0.4, 1.2, 1.2, 1.2, 1.2]))
+    events += events_for(
+        feed(
+            fsm,
+            [1.2, 1.2, 0.4, 0.4, 0.4, 1.2, 1.2, 1.2],
+            start_ms=300.0,
+            positions=[
+                (100.0, 100.0),
+                (100.0, 100.0),
+                (150.0, 100.0),
+                (160.0, 100.0),
+                (220.0, 100.0),
+                (220.0, 100.0),
+                (220.0, 100.0),
+                (220.0, 100.0),
+            ],
+        )
+    )
+
+    assert events.count(PinchEventKind.CLICK) == 1
+    assert PinchEventKind.DOUBLE_CLICK not in events
+    assert PinchEventKind.DRAG_END in events
+
+
+def test_drag_before_next_click_clears_double_click_timing():
+    fsm = PinchFSM()
+    events = events_for(feed(fsm, [1.2, 0.4, 0.4, 1.2, 1.2, 1.2, 1.2]))
+    events += events_for(
+        feed(
+            fsm,
+            [1.2, 1.2, 0.4, 0.4, 0.4, 1.2, 1.2, 1.2],
+            start_ms=300.0,
+            positions=[
+                (100.0, 100.0),
+                (100.0, 100.0),
+                (100.0, 100.0),
+                (100.0, 100.0),
+                (150.0, 100.0),
+                (220.0, 100.0),
+                (220.0, 100.0),
+                (220.0, 100.0),
+            ],
+        )
+    )
+    events += events_for(feed(fsm, [1.2, 0.4, 0.4, 1.2, 1.2, 1.2, 1.2], start_ms=800.0))
+
     assert events.count(PinchEventKind.CLICK) == 2
     assert PinchEventKind.DOUBLE_CLICK not in events
 

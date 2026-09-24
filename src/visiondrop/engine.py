@@ -75,6 +75,7 @@ class Engine:
 
         if not observation.hands:
             self.pinch.reset()
+            self._velocity.reset()
             return EngineState(
                 timestamp_s=ts_s,
                 hand_present=False,
@@ -90,8 +91,20 @@ class Engine:
         features = HandFeatures.from_landmarks(hand.landmarks, aspect=self.frame_aspect)
         speed = self._velocity(features.pinch_point, ts_s)
         idle = is_idle_pose(features, speed)
+        if idle:
+            self.pinch.reset()
+            return EngineState(
+                timestamp_s=ts_s,
+                hand_present=True,
+                active=False,
+                idle=True,
+                features=features,
+                pinch=None,
+                cursor=self.cursor.position,
+                velocity=speed,
+            )
 
-        ratio = math.inf if idle else features.pinch_ratio
+        ratio = features.pinch_ratio
         screen_pos = self.cursor.map_to_screen(features.pinch_point)
         pinch = self.pinch.update(ratio, screen_pos, ts_ms)
 
