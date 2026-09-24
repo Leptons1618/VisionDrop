@@ -7,9 +7,9 @@ let package = Package(
     name: "VisionDrop",
     platforms: [.macOS(.v15)],
     products: [
-        .library(name: "VisionDropCore", targets: ["VisionDropCore"]),
         .library(name: "VisionDropKit", targets: ["VisionDropKit"]),
         .executable(name: "visiondrop-cli", targets: ["visiondrop-cli"]),
+        .executable(name: "visiondrop-app", targets: ["visiondrop-app"]),
     ],
     targets: [
         // Pure logic. No AppKit, no Vision, no I/O, no wall-clock time.
@@ -27,6 +27,14 @@ let package = Package(
         .executableTarget(
             name: "visiondrop-cli",
             dependencies: ["VisionDropCore", "VisionDropKit"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+
+        // Minimal menu-bar shell. The overlay and capture loop remain separate
+        // increments; this target proves the app lifecycle and permission UX.
+        .executableTarget(
+            name: "visiondrop-app",
+            dependencies: ["VisionDropKit"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
 

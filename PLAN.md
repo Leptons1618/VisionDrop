@@ -10,10 +10,10 @@
 > **Current progress:** the Swift package now contains geometry conversion, two-dimensional hand
 > landmarks and features, One Euro filtering, pinch and idle state machines, pointer mapping,
 > configuration, AVFoundation capture, Vision tracking, a landmark-only v2 recorder, deterministic
-> replay, and a headless CLI. Core and Vision mapping tests plus a synthetic replay fixture are
-> present. There is still no app target, overlay, event injection, Canvas, Lens, real evaluation
-> corpus, or demonstrated M0–M7 milestone exit criterion. The Python prototype remains under
-> `src/visiondrop/`; the original demos are under `legacy/`.
+> replay, a headless CLI, and a minimal menu-bar app shell. Core and Vision mapping tests plus a
+> synthetic replay fixture are present. There is still no click-through overlay, event injection,
+> Canvas, Lens, real evaluation corpus, or demonstrated M0–M7 milestone exit criterion. The Python
+> prototype remains under `src/visiondrop/`; the original demos are under `legacy/`.
 
 ---
 
