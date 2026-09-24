@@ -30,11 +30,11 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
 
-        // Minimal menu-bar shell. The overlay and capture loop remain separate
-        // increments; this target proves the app lifecycle and permission UX.
+        // Native menu-bar shell. The live camera → Vision → engine loop lives
+        // here; the overlay and control layers remain separate increments.
         .executableTarget(
             name: "visiondrop-app",
-            dependencies: ["VisionDropKit"],
+            dependencies: ["VisionDropCore", "VisionDropKit"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
 

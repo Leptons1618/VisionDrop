@@ -5,10 +5,10 @@ transparent overlay will draw a cursor, gestures, and annotations over the real 
 preview is intended in the product; the camera is a sensor. The current implementation status is below.
 
 **VisionDrop 2.0 is under active Swift implementation.** The current repository contains the package,
-headless CLI, camera/Vision sensing, a landmark-only recorder, and a replayable interaction engine. The
-menu-bar app, click-through overlay, event injection, Canvas, and Lens are not implemented. The Python
-code in `src/visiondrop/` is a runnable prototype, not the product implementation. See
-[the documents below](#documentation).
+headless CLI, camera/Vision sensing, a landmark-only recorder, a replayable interaction engine, and a
+native menu-bar shell that can start and stop live tracking. The click-through overlay, event
+injection, Canvas, and Lens are not implemented. The Python code in `src/visiondrop/` is a runnable
+prototype, not the product implementation. See [the documents below](#documentation).
 
 The Python + MediaPipe implementation assumed by the original research plan is superseded by Swift and
 Apple frameworks ([ADR 0001](docs/adr/0001-implementation-language.md)).
@@ -26,7 +26,7 @@ Apple frameworks ([ADR 0001](docs/adr/0001-implementation-language.md)).
 
 | Milestone | Current state |
 | --- | --- |
-| M0 — Skeleton | **Partial.** The Swift package, menu-bar app shell, and headless CI are present. Developer ID signing and notarization are not. |
+| M0 — Skeleton | **Partial.** The Swift package, menu-bar app shell with live tracking controls, and headless CI are present. Developer ID signing and notarization are not. |
 | M1 — Sensing | **Partial.** AVFoundation capture, Vision tracking, and landmark-only JSONL record/replay are present. Video recording, a real evaluation corpus, and the tracker A/B are not. |
 | M2 — Engine | **Partial.** Geometry, features, filtering, pinch/idle state machines, pointer mapping, configuration, and deterministic replay are implemented. The milestone's evaluation exit criteria have not been demonstrated. |
 | M3 — Overlay | Not implemented. There is no click-through overlay, cursor renderer, or HUD yet. |
@@ -85,7 +85,7 @@ Requires macOS 15+ and the Swift 6 toolchain on an Apple silicon Mac.
 swift build
 swift test
 swift run visiondrop-cli info
-swift run visiondrop-app                 # menu-bar app shell; camera access is requested from its menu
+swift run visiondrop-app                 # menu-bar shell; Start Tracking runs camera → Vision → engine
 
 # Capture a landmark-only v2 recording. The CLI supports --seconds, --device,
 # and --no-mirror; run `visiondrop-cli --help` for the current syntax.
@@ -160,7 +160,7 @@ VisionDrop/
 │   ├── VisionDropCore/       # pure engine logic and v2 JSONL codec
 │   ├── VisionDropKit/        # AVFoundation capture and Vision hand tracking
 │   ├── visiondrop-cli/       # info, landmark-only record, deterministic replay
-│   └── visiondrop-app/       # minimal menu-bar shell and camera permission UX
+│   └── visiondrop-app/       # menu-bar shell, camera permission, live tracking controls
 ├── Tests/
 │   ├── VisionDropCoreTests/  # engine, geometry, recording, synthetic replay
 │   ├── VisionDropKitTests/   # Vision joint mapping and handedness geometry
@@ -175,9 +175,9 @@ VisionDrop/
 ├── GUIDE.md                  # legacy demo guide
 └── PLAN.md                   # research plus superseded proposal sections
 ```
-There is no `App/` bundle or click-through overlay, event injection, Canvas, or Lens source yet.
-The `visiondrop-app` executable is a minimal menu-bar shell; `docs/ARCHITECTURE.md` distinguishes that
-present shell from the planned product layers.
+There is no shipping `App/` bundle or click-through overlay, event injection, Canvas, or Lens source
+yet. The `visiondrop-app` executable is a menu-bar shell with live camera → Vision → engine tracking;
+`docs/ARCHITECTURE.md` distinguishes that present shell from the planned product layers.
 
 ## Legacy demos
 

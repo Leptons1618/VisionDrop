@@ -34,7 +34,7 @@ VisionDrop/
 │   │   └── Configuration.swift
 │   ├── VisionDropKit/           # Camera/ and Tracking/ only
 │   ├── visiondrop-cli/          # info, landmark-only record, deterministic replay
-│   └── visiondrop-app/          # minimal menu-bar shell and camera permission UX
+│   └── visiondrop-app/          # menu-bar shell and live camera → Vision → engine loop
 ├── Tests/
 │   ├── VisionDropCoreTests/
 │   ├── VisionDropKitTests/      # joint mapping and handedness geometry
@@ -84,9 +84,10 @@ requiring callers to use numeric indexes; the Vision mapping is implemented and 
 
 `VisionDropKit` presently contains AVFoundation `CameraSource` and `VisionHandTracker` behind
 `HandTracking`. The headless CLI directly sequences capture, inference, recording, and replay. The
-`visiondrop-app` target is a minimal `@MainActor` menu-bar shell: it displays camera permission and
-device counts and can request camera access. The three-context actor/main-actor pipeline described
-in §2, the overlay, event injector, settings UI, onboarding, Canvas, and Lens remain planned.
+`visiondrop-app` target is a `@MainActor` menu-bar shell: it displays camera permission and device
+counts, can request camera access, and runs a cancellable camera → Vision → engine loop off the main
+actor. The three-context actor/main-actor pipeline described in §2, the overlay, event injector,
+settings UI, onboarding, Canvas, and Lens remain planned.
 ---
 
 ## 2. Concurrency model
@@ -233,7 +234,7 @@ release checklist and are re-verified on every macOS update (R5).
 | --- | --- |
 | Language | Swift 6 language mode in the package; warnings-as-errors build in CI |
 | Minimum OS | macOS 15.0 |
-| Build | Swift Package Manager. The minimal `visiondrop-app` executable is present; signing, notarization, and an Xcode app project remain. |
+| Build | Swift Package Manager. The `visiondrop-app` executable and live tracking loop are present; signing, notarization, and an Xcode app project remain. |
 | Tests | Swift Testing (`@Test` / `#expect`) |
 | Lint | No SwiftLint configuration or SwiftLint step is currently present. |
 

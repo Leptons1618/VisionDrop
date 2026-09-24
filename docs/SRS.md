@@ -669,8 +669,9 @@ satisfy the v2 schema rather than being silently reinterpreted.
 ## 8. Release plan
 
 The following is a target release plan, not an achievement ledger. No milestone is currently accepted:
-the package and CI pieces exist, a minimal menu-bar shell is present, and M1/M2 have partial Swift
-implementations, but signing/notarization, the real evaluation criteria, and M3–M7 remain incomplete.
+the package, CI, and menu-bar shell with live tracking controls are present, and M1/M2 have partial
+Swift implementations, but signing/notarization, the real evaluation criteria, and M3–M7 remain
+incomplete.
 
 | # | Milestone | Contents | Exit criterion |
 | --- | --- | --- | --- |
