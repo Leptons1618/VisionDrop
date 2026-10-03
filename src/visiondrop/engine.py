@@ -7,6 +7,9 @@ HUD, and the replay tests all drive the same ``Engine.process``.
 from __future__ import annotations
 
 import math
+import re
+import subprocess
+import sys
 from dataclasses import dataclass
 
 from . import config as _config
@@ -17,18 +20,48 @@ from .gestures import PinchEventKind, PinchFSM, PinchState, is_idle_pose
 from .tracking import FrameObservation
 
 
-def primary_screen_size() -> tuple[int, int]:
-    """Screen size in pixels, falling back to 1920x1080 when unavailable."""
-    try:
-        import Quartz
+FALLBACK_SCREEN_SIZE = (1920, 1080)
 
-        display = Quartz.CGMainDisplayID()
-        return (
-            int(Quartz.CGDisplayPixelsWide(display)),
-            int(Quartz.CGDisplayPixelsHigh(display)),
-        )
+
+def primary_screen_size() -> tuple[int, int]:
+    """Primary screen size in pixels, falling back to 1920x1080 when unavailable.
+
+    macOS asks Quartz (needs the ``macos`` extra), Windows asks user32, and
+    everything else asks ``xrandr``, which covers X11 and XWayland sessions.
+    """
+    try:
+        if sys.platform == "darwin":
+            import Quartz
+
+            display = Quartz.CGMainDisplayID()
+            size = (int(Quartz.CGDisplayPixelsWide(display)), int(Quartz.CGDisplayPixelsHigh(display)))
+        elif sys.platform == "win32":
+            import ctypes
+
+            user32 = ctypes.windll.user32
+            size = (int(user32.GetSystemMetrics(0)), int(user32.GetSystemMetrics(1)))
+        else:
+            result = subprocess.run(
+                ["xrandr", "--current"], capture_output=True, text=True, timeout=2, check=True
+            )
+            size = parse_xrandr(result.stdout)
     except Exception:
-        return (1920, 1080)
+        return FALLBACK_SCREEN_SIZE
+    if size is None or size[0] <= 0 or size[1] <= 0:
+        return FALLBACK_SCREEN_SIZE
+    return size
+
+
+_XRANDR_OUTPUT = re.compile(r"^\S+ connected (primary )?.*?(\d+)x(\d+)\+\d+\+\d+", re.MULTILINE)
+
+
+def parse_xrandr(text: str) -> tuple[int, int] | None:
+    """The primary output's size from ``xrandr`` output, else the first active one."""
+    outputs = [(bool(m.group(1)), (int(m.group(2)), int(m.group(3)))) for m in _XRANDR_OUTPUT.finditer(text)]
+    for primary, size in outputs:
+        if primary:
+            return size
+    return outputs[0][1] if outputs else None
 
 
 @dataclass(frozen=True)

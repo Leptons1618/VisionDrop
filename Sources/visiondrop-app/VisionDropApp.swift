@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import VisionDropCore
 import VisionDropKit
@@ -245,3 +246,20 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         }
     }
 }
+
+#else
+
+import Foundation
+
+// The menu-bar shell is AppKit. Off macOS the headless CLI is the supported
+// surface, so say so rather than failing to build.
+@main
+struct VisionDropApp {
+    static func main() {
+        FileHandle.standardError.write(
+            Data("visiondrop-app requires macOS; use visiondrop-cli replay on this platform\n".utf8))
+        exit(1)
+    }
+}
+
+#endif

@@ -1,3 +1,6 @@
+// Takes a CapturedFrame, which only exists where AVFoundation does.
+#if canImport(AVFoundation)
+
 import VisionDropCore
 
 /// A source of hand landmarks.
@@ -22,3 +25,5 @@ public protocol HandTracking: Sendable {
     /// - Throws: whatever the underlying tracker raises for an unusable frame.
     func hands(in frame: CapturedFrame, minimumConfidence: Double) async throws -> FrameObservation
 }
+
+#endif

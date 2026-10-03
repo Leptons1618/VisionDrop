@@ -46,9 +46,11 @@ struct CLI {
             """
             visiondrop-cli — headless engine tooling
 
-              replay <recording.jsonl> [--verbose] [--json]
+              replay <recording.jsonl | -> [--verbose] [--json]
                   Replay a recorded session through the engine and report the
-                  gesture events and timing it produced.
+                  gesture events and timing it produced. `-` reads a live v2
+                  stream from stdin and handles each frame as it arrives, e.g.
+                  `visiondrop run --emit-v2 | visiondrop-cli replay - --verbose`.
 
               record <out.jsonl> [--seconds N] [--device ID] [--no-mirror]
                   Capture from the camera, track hands, and write a replayable
@@ -72,34 +74,48 @@ struct CLI {
     }
 
     static func replay(_ arguments: [String]) throws {
-        let flags = Set(arguments.filter { $0.hasPrefix("--") })
-        guard let path = arguments.first(where: { !$0.hasPrefix("--") }) else {
-            throw CLIError.missingArgument("replay needs a path to a .jsonl recording")
+        let (path, flags, _) = try parse(
+            arguments, command: "replay", switches: ["--verbose", "--json"], options: [])
+
+        // Lines are decoded and run one at a time, so `-` can be a live feed:
+        // another tracker writing v2 frames to our stdin as it sees them.
+        let source: String
+        let lines: AnyIterator<String>
+        if path == "-" {
+            source = "stdin"
+            lines = AnyIterator { readLine(strippingNewline: true) }
+        } else {
+            let url = URL(fileURLWithPath: path)
+            source = url.lastPathComponent
+            let text = try String(contentsOf: url, encoding: .utf8)
+            lines = AnyIterator(
+                text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init).makeIterator())
         }
 
-        let url = URL(fileURLWithPath: path)
-        let text = try String(contentsOf: url, encoding: .utf8)
-        let session = try SessionCodec().decode(jsonl: text)
-
-        let layout = DisplayLayout(
-            displays: session.header.displays.map {
-                Display(
-                    id: $0.id,
-                    bounds: ScreenRect(
-                        x: $0.bounds[0], y: $0.bounds[1], width: $0.bounds[2], height: $0.bounds[3]),
-                    scale: $0.scale,
-                    isPrimary: $0.primary
-                )
-            })
-
+        let codec = SessionCodec()
         let config = EngineConfiguration()
-        var engine = Engine(config: config, layout: layout, frameAspect: session.header.camera.aspect)
+        var header: SessionHeader?
+        var engine = Engine(config: config)
+        var frames: [Double] = []
+        var number = 0
         var eventSequence: [String] = []
         var counts: [String: Int] = [:]
         var durations: [Double] = []
         var handsPresent = 0
 
-        for frame in session.frames {
+        while let raw = lines.next() {
+            number += 1
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            if header == nil {
+                let decoded = try codec.decodeHeader(line: line)
+                header = decoded
+                engine = Engine(
+                    config: config, layout: layout(of: decoded), frameAspect: decoded.camera.aspect)
+                continue
+            }
+            let frame = try codec.decodeFrame(line: line, number: number, after: frames.last)
+            frames.append(frame.t)
             let observation = frame.observation(minimumConfidence: config.tracking.minimumLandmarkConfidence)
             let started = DispatchTime.now().uptimeNanoseconds
             let state = engine.process(observation)
@@ -110,20 +126,26 @@ struct CLI {
                 eventSequence.append(event.rawValue)
                 counts[event.rawValue, default: 0] += 1
                 if flags.contains("--verbose") {
-                    print(
-                        String(
-                            format: "[%8.3f] %-12@ pointer=(%.0f,%.0f) ratio=%.3f",
-                            state.timestamp.seconds, event.rawValue as NSString,
-                            state.pointer.x, state.pointer.y, state.pinch?.ratio ?? 0))
+                    // Unbuffered, so a live feed shows each event as it happens
+                    // even when stdout is a pipe.
+                    let line =
+                        String(format: "[%8.3f] ", state.timestamp.seconds)
+                        + event.rawValue.padding(toLength: 12, withPad: " ", startingAt: 0)
+                        + String(
+                            format: " pointer=(%.0f,%.0f) ratio=%.3f\n",
+                            state.pointer.x, state.pointer.y, state.pinch?.ratio ?? 0)
+                    FileHandle.standardOutput.write(Data(line.utf8))
                 }
             }
         }
 
+        guard let header else { throw SessionError.emptyRecording }
+
         let sorted = durations.sorted()
         let report = ReplayReport(
-            frames: session.frames.count,
+            frames: frames.count,
             handsPresent: handsPresent,
-            durationSeconds: (session.frames.last?.t ?? 0) - (session.frames.first?.t ?? 0),
+            durationSeconds: (frames.last ?? 0) - (frames.first ?? 0),
             eventSequence: eventSequence,
             events: counts,
             meanProcessingMicroseconds: durations.isEmpty
@@ -137,8 +159,8 @@ struct CLI {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             print(String(decoding: try encoder.encode(report), as: UTF8.self))
         } else {
-            print("replayed \(report.frames) frames from \(url.lastPathComponent)")
-            print("  tracker:   \(session.header.tracker)")
+            print("replayed \(report.frames) frames from \(source)")
+            print("  tracker:   \(header.tracker)")
             print("  hands:     \(report.handsPresent)/\(report.frames) frames")
             print(
                 String(
@@ -152,6 +174,19 @@ struct CLI {
                 }
             }
         }
+    }
+
+    static func layout(of header: SessionHeader) -> DisplayLayout {
+        DisplayLayout(
+            displays: header.displays.map {
+                Display(
+                    id: $0.id,
+                    bounds: ScreenRect(
+                        x: $0.bounds[0], y: $0.bounds[1], width: $0.bounds[2], height: $0.bounds[3]),
+                    scale: $0.scale,
+                    isPrimary: $0.primary
+                )
+            })
     }
 
     // MARK: info
@@ -168,27 +203,72 @@ struct CLI {
         )
         print("")
         print("permissions:")
+        #if canImport(AVFoundation)
         print("  camera:           \(CameraSource.authorizationDescription) — hand tracking")
+        #else
+        print("  camera:           not applicable on this platform")
+        #endif
         print("  accessibility:    checked from M4 — injecting clicks and keys")
         print("  screen recording: checked from M6 — magnifier and OCR")
         print("")
         print("cameras:")
+        #if canImport(AVFoundation)
         let cameras = CameraSource.availableDevices()
         if cameras.isEmpty {
             print("  none found")
         } else {
             for camera in cameras { print("  \(camera.name)  [\(camera.id)]") }
         }
+        #else
+        print("  unavailable: camera capture is macOS-only; replay works on this platform")
+        #endif
     }
 }
 
 enum CLIError: Error, CustomStringConvertible {
     case missingArgument(String)
+    case invalidArgument(String)
+    case unsupported(String)
 
     var description: String {
         switch self {
-        case .missingArgument(let detail): detail
+        case .missingArgument(let detail), .invalidArgument(let detail), .unsupported(let detail):
+            detail
         }
+    }
+}
+
+extension CLI {
+    /// Splits arguments into exactly one positional path, on/off switches, and
+    /// options that take a value. Anything else is an error rather than being
+    /// ignored, so a typo cannot silently change what was recorded or replayed.
+    static func parse(
+        _ arguments: [String], command: String, switches: Set<String>, options: Set<String>
+    ) throws -> (path: String, switches: Set<String>, options: [String: String]) {
+        var paths: [String] = []
+        var seen: Set<String> = []
+        var values: [String: String] = [:]
+        var remaining = arguments[...]
+        while let argument = remaining.popFirst() {
+            if switches.contains(argument) {
+                seen.insert(argument)
+            } else if options.contains(argument) {
+                guard let value = remaining.popFirst(), !value.hasPrefix("--") else {
+                    throw CLIError.missingArgument("\(argument) needs a value")
+                }
+                values[argument] = value
+            } else if argument.hasPrefix("-") && argument != "-" {
+                throw CLIError.invalidArgument("\(command) does not accept \(argument)")
+            } else {
+                paths.append(argument)
+            }
+        }
+        guard paths.count == 1, let path = paths.first, !path.isEmpty else {
+            throw paths.isEmpty
+                ? CLIError.missingArgument("\(command) needs a path")
+                : CLIError.invalidArgument("\(command) takes one path, got \(paths.count)")
+        }
+        return (path, seen, values)
     }
 }
 
@@ -205,13 +285,17 @@ extension CLI {
     /// binary run from a terminal inherits the terminal's grant rather than
     /// having one of its own (ARCHITECTURE §4, H9).
     static func record(_ arguments: [String]) async throws {
-        let flags = Set(arguments.filter { $0.hasPrefix("--") })
-        guard let path = arguments.first(where: { !$0.hasPrefix("--") }) else {
-            throw CLIError.missingArgument("record needs an output path")
-        }
-        let seconds = value(for: "--seconds", in: arguments).flatMap(Double.init) ?? 10
-        let deviceID = value(for: "--device", in: arguments)
+        let (path, flags, options) = try parse(
+            arguments, command: "record", switches: ["--no-mirror"], options: ["--seconds", "--device"])
+        let seconds = try options["--seconds"].map(parseSeconds) ?? 10
+        let deviceID = options["--device"]
         let mirrored = !flags.contains("--no-mirror")
+
+        #if !(canImport(AVFoundation) && canImport(Vision))
+        _ = (path, seconds, deviceID, mirrored)
+        throw CLIError.unsupported(
+            "record needs AVFoundation and Vision, which are macOS-only; replay works on this platform")
+        #else
 
         guard await CameraSource.requestAccess() else { throw CameraError.permissionDenied }
 
@@ -276,10 +360,13 @@ extension CLI {
         let withHands = recorded.count { !$0.hands.isEmpty }
         print("  hands present in \(withHands)/\(recorded.count) frames")
         for (name, count) in counts.sorted(by: { $0.key < $1.key }) { print("  \(name): \(count)") }
+        #endif
     }
 
-    static func value(for flag: String, in arguments: [String]) -> String? {
-        guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
-        return arguments[index + 1]
+    static func parseSeconds(_ text: String) throws -> Double {
+        guard let seconds = Double(text), seconds.isFinite, seconds > 0 else {
+            throw CLIError.invalidArgument("--seconds must be a positive number, got '\(text)'")
+        }
+        return seconds
     }
 }

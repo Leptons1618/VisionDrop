@@ -226,16 +226,33 @@ public struct SessionCodec: Sendable {
             .filter { !$0.element.isEmpty }
 
         guard let first = lines.first else { throw SessionError.emptyRecording }
+        let header = try decodeHeader(line: first.element)
 
-        let decoder = Self.decoder()
-        guard let headerData = first.element.data(using: .utf8),
+        var frames: [RecordedFrame] = []
+        for (index, line) in lines.dropFirst() {
+            frames.append(try decodeFrame(line: line, number: index + 1, after: frames.last?.t))
+        }
+        return (header, frames)
+    }
+
+    /// Parses and validates the header line, which must come first.
+    ///
+    /// Exposed separately from `decode(jsonl:)` so a live stream can be read a
+    /// line at a time as frames arrive.
+    ///
+    /// - Parameter line: the first non-blank line, without its newline.
+    /// - Returns: the header.
+    /// - Throws: `SessionError` for a missing, malformed, unsupported or
+    ///   invalid header.
+    public func decodeHeader(line: String) throws -> SessionHeader {
+        guard let headerData = line.data(using: .utf8),
             let probe = try? JSONSerialization.jsonObject(with: headerData) as? [String: Any],
             probe["type"] as? String == "header"
         else { throw SessionError.missingHeader }
 
         let header: SessionHeader
         do {
-            header = try decoder.decode(SessionHeader.self, from: headerData)
+            header = try Self.decoder().decode(SessionHeader.self, from: headerData)
         } catch {
             throw SessionError.malformedLine(number: 1, reason: "\(error)")
         }
@@ -246,43 +263,47 @@ public struct SessionCodec: Sendable {
             )
         }
         try header.validate()
+        return header
+    }
 
-        var frames: [RecordedFrame] = []
-        var previousTimestamp: Double?
-        for (index, line) in lines.dropFirst() {
-            let number = index + 1
-            guard let data = line.data(using: .utf8) else {
-                throw SessionError.malformedLine(number: number, reason: "not valid UTF-8")
-            }
-            let frame: RecordedFrame
-            do {
-                frame = try decoder.decode(RecordedFrame.self, from: data)
-            } catch {
-                throw SessionError.malformedLine(number: number, reason: "\(error)")
-            }
-            guard frame.t.isFinite else {
-                throw SessionError.invalidFrame(reason: "timestamp must be finite")
-            }
-            if let previousTimestamp, frame.t < previousTimestamp {
-                throw SessionError.invalidFrame(reason: "timestamps must be monotonic")
-            }
-            previousTimestamp = frame.t
-            for hand in frame.hands {
-                guard hand.points.count == HandJoint.allCases.count else {
-                    throw SessionError.wrongPointCount(line: number, found: hand.points.count)
-                }
-                for point in hand.points.compactMap({ $0 }) {
-                    guard point.count == 3, point.allSatisfy(\.isFinite),
-                        (0.0...1.0).contains(point[2])
-                    else {
-                        throw SessionError.wrongPointArity(line: number, found: point.count)
-                    }
-                }
-            }
-            frames.append(frame)
+    /// Parses and validates one frame line.
+    ///
+    /// - Parameters:
+    ///   - line: one JSON object, without its newline.
+    ///   - number: the 1-based line number, for error messages.
+    ///   - previous: the preceding frame's timestamp; timestamps may not go
+    ///     backwards.
+    /// - Returns: the frame.
+    /// - Throws: `SessionError` for a malformed, out-of-order or invalid frame.
+    public func decodeFrame(line: String, number: Int, after previous: Double?) throws -> RecordedFrame {
+        guard let data = line.data(using: .utf8) else {
+            throw SessionError.malformedLine(number: number, reason: "not valid UTF-8")
         }
-
-        return (header, frames)
+        let frame: RecordedFrame
+        do {
+            frame = try Self.decoder().decode(RecordedFrame.self, from: data)
+        } catch {
+            throw SessionError.malformedLine(number: number, reason: "\(error)")
+        }
+        guard frame.t.isFinite else {
+            throw SessionError.invalidFrame(reason: "timestamp must be finite")
+        }
+        if let previous, frame.t < previous {
+            throw SessionError.invalidFrame(reason: "timestamps must be monotonic")
+        }
+        for hand in frame.hands {
+            guard hand.points.count == HandJoint.allCases.count else {
+                throw SessionError.wrongPointCount(line: number, found: hand.points.count)
+            }
+            for point in hand.points.compactMap({ $0 }) {
+                guard point.count == 3, point.allSatisfy(\.isFinite),
+                    (0.0...1.0).contains(point[2])
+                else {
+                    throw SessionError.wrongPointArity(line: number, found: point.count)
+                }
+            }
+        }
+        return frame
     }
 }
 

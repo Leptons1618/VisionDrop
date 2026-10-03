@@ -8,10 +8,13 @@ without a camera, and it is the dataset used to calibrate thresholds.
 from __future__ import annotations
 
 import json
+import math
 import statistics
 from collections import deque
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import TextIO
 
 import numpy as np
 
@@ -88,6 +91,96 @@ class JsonlRecorder:
         if self._file is not None:
             self._file.close()
             self._file = None
+
+
+class V2Writer:
+    """Streams the Swift engine's v2 session format, one flushed line per frame.
+
+    This is how the Swift engine runs live off macOS, where Apple Vision does
+    not exist: ``visiondrop run --emit-v2 | visiondrop-cli replay - --verbose``.
+    Everything that differs between the two trackers is converted here and
+    nowhere else: y flips to Vision's bottom-left origin, MediaPipe's depth is
+    dropped (SRS CON-5), and the hand score stands in for per-joint confidence,
+    which MediaPipe does not report.
+    """
+
+    TRACKER = "mediapipe.hands.python"
+
+    def __init__(
+        self,
+        stream: TextIO,
+        *,
+        camera_size: tuple[int, int],
+        fps: float,
+        mirrored: bool,
+        screen_size: tuple[int, int],
+        camera_id: str = "opencv",
+        started: datetime | None = None,
+    ) -> None:
+        self._stream = stream
+        self._t0: float | None = None
+        self._last_t = 0.0
+        # Swift's ISO-8601 decoder rejects fractional seconds.
+        started = (started or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self._emit(
+            {
+                "type": "header",
+                "version": 2,
+                "tracker": self.TRACKER,
+                "camera": {
+                    "id": camera_id,
+                    "width": int(camera_size[0]),
+                    "height": int(camera_size[1]),
+                    "fps": float(fps),
+                    "mirrored": bool(mirrored),
+                },
+                "displays": [
+                    {
+                        "id": 1,
+                        "bounds": [0, 0, int(screen_size[0]), int(screen_size[1])],
+                        "scale": 1.0,
+                        "primary": True,
+                    }
+                ],
+                "started": started,
+                "video": None,
+            }
+        )
+
+    def write(self, observation: FrameObservation) -> None:
+        if self._t0 is None:
+            self._t0 = observation.timestamp_s
+        # The reader rejects a frame that goes back in time and stops. The camera
+        # clock is monotonic, so this only keeps one bad stamp from ending a session.
+        t = max(self._last_t, round(observation.timestamp_s - self._t0, 6))
+        self._last_t = t
+        self._emit({"type": "frame", "t": t, "hands": [v2_hand(hand) for hand in observation.hands]})
+
+    def _emit(self, record: dict) -> None:
+        self._stream.write(json.dumps(record, sort_keys=True, allow_nan=False) + "\n")
+        self._stream.flush()
+
+
+def v2_hand(hand: HandObservation) -> dict:
+    """One MediaPipe hand as a v2 hand: 21 ``[x, y, confidence]`` points in Vision space."""
+    landmarks = np.asarray(hand.landmarks, dtype=float)
+    if landmarks.ndim != 2 or landmarks.shape[0] != 21 or landmarks.shape[1] < 2:
+        raise ValueError(f"expected 21 landmarks, got shape {landmarks.shape}")
+    score = float(hand.score)
+    confidence = min(max(score, 0.0), 1.0) if math.isfinite(score) else 0.0
+    label = str(hand.handedness).lower()
+    return {
+        "handedness": label if label in ("left", "right") else "unknown",
+        "score": confidence,
+        # A non-finite coordinate is a joint the tracker did not really see:
+        # report it missing rather than as a point (SRS DAT-5).
+        "points": [
+            [round(float(x), 6), round(1.0 - float(y), 6), confidence]
+            if math.isfinite(x) and math.isfinite(y)
+            else None
+            for x, y in landmarks[:, :2]
+        ],
+    }
 
 
 def load_recording(path: str | Path) -> list[FrameObservation]:

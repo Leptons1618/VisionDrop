@@ -45,3 +45,45 @@ jobs:
 
       - name: Check expected events
         run: Scripts/check-fixtures.sh
+
+      - name: CLI good and bad input
+        run: Scripts/check-cli.sh
+
+  # The engine, recording format and replay CLI are platform-independent and
+  # must behave identically off macOS. Camera capture, Vision and the menu-bar
+  # app are compiled out here and must refuse cleanly, which check-cli asserts.
+  linux:
+    runs-on: ubuntu-24.04
+    container: swift:6.1-noble
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install python3
+        run: apt-get update && apt-get install -y --no-install-recommends python3
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build -Xswiftc -warnings-as-errors
+
+      - name: Test
+        run: swift test
+
+      - name: Check expected events
+        run: Scripts/check-fixtures.sh
+
+      - name: CLI good and bad input
+        run: Scripts/check-cli.sh
+
+  python-prototype:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Test
+        run: uv run --python 3.11 pytest

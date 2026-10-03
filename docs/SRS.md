@@ -52,7 +52,8 @@ are taken from the literature reviewed there and are not re-derived here.
 - provides three modes — Pointer, Canvas and Lens;
 - records and replays landmark sessions so that gesture behaviour is regression-tested offline.
 
-**Out of scope for 2.0.** Windows or Linux support; any network feature, account or telemetry
+**Out of scope for 2.0.** Live Windows or Linux operation (the engine and replay CLI do build and run on
+Linux — see PRT-3); any network feature, account or telemetry
 upload; multi-user or remote operation; training or fine-tuning of vision models; voice input;
 mobile or visionOS clients; Mac App Store distribution (structurally excluded — see CON-4).
 
@@ -567,7 +568,7 @@ set the depth component to zero. A fixture that cannot express a value cannot te
 | --- | --- | :---: | :---: |
 | **PRT-1** | The engine module shall depend on no platform framework, so it remains portable if ADR 0001 is revisited. | M | I |
 | **PRT-2** | The recording format shall be platform- and tracker-independent. | M | I |
-| **PRT-3** | Non-Apple platform support. | W | — |
+| **PRT-3** | Non-Apple platform support. Partial since 2026-10-03: `VisionDropCore` and `visiondrop-cli replay`/`info` build and pass their tests on Linux in CI; Apple-framework code is compiled out, and `record` and `visiondrop-app` exit with an error there. The engine runs live on Linux by reading a v2 stream on stdin (`replay -`) from the Python prototype's MediaPipe tracker (`visiondrop run --emit-v2`); the bridge is pinned by a cross-language fixture. Native capture and tracking, overlay and injection off macOS remain `W`. | W | T |
 
 ---
 

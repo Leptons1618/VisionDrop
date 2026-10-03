@@ -1,3 +1,6 @@
+// AVFoundation exists only on Apple platforms; elsewhere this module exposes no camera.
+#if canImport(AVFoundation)
+
 import AVFoundation
 import CoreVideo
 import Foundation
@@ -247,3 +250,5 @@ extension CameraSource: AVCaptureVideoDataOutputSampleBufferDelegate {
         lock.withLock { droppedFrames += 1 }
     }
 }
+
+#endif

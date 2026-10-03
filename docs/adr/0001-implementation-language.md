@@ -301,6 +301,12 @@ Supporting decisions:
 Windows and Linux ports. Reversing this later means rewriting the engine (~700 lines, cheap) and
 the entire platform layer (expensive). That is the real cost of the decision, stated plainly.
 
+*Update 2026-10-03:* the engine, recording format and replay CLI now build and pass their tests on
+Linux, because Core never depended on a platform framework (SRS PRT-1), and the engine can run live
+there from the Python prototype's MediaPipe stream over the v2 format (SRS PRT-2). That keeps the cheap
+half of a port proven without adding a dependency; it does not make the overlay or injection
+cross-platform and does not trigger §7.2.
+
 ---
 
 ## 7. Revisit triggers

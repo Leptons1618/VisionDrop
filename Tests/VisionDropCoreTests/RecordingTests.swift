@@ -170,6 +170,32 @@ struct RecordingTests {
         }
     }
 
+    /// A live feed is decoded one line at a time; it must agree with decoding
+    /// the finished file, or a stream and its saved copy would replay apart.
+    @Test("line-by-line decoding matches whole-file decoding")
+    func lineDecodingMatchesWholeDecoding() throws {
+        let text = try jsonl(header: makeHeader(), frames: makeFrames())
+        let lines = text.split(separator: "\n").map(String.init)
+
+        let header = try codec.decodeHeader(line: lines[0])
+        var frames: [RecordedFrame] = []
+        for (index, line) in lines.enumerated().dropFirst() {
+            frames.append(try codec.decodeFrame(line: line, number: index + 1, after: frames.last?.t))
+        }
+
+        let whole = try codec.decode(jsonl: text)
+        #expect(header == whole.header)
+        #expect(frames == whole.frames)
+    }
+
+    @Test("a frame line is not accepted as a header, nor a header as a frame")
+    func lineKindsAreNotInterchangeable() throws {
+        let frame = try codec.encode(frame: RecordedFrame(t: 0, hands: []))
+        #expect(throws: SessionError.missingHeader) { try codec.decodeHeader(line: frame) }
+        let header = try codec.encode(header: makeHeader())
+        #expect(throws: SessionError.self) { try codec.decodeFrame(line: header, number: 2, after: nil) }
+    }
+
     // MARK: Replay
 
     @Test("blank lines in the middle of a recording are skipped")

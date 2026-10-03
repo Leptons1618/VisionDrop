@@ -54,6 +54,16 @@ class CameraCapture:
         self._timestamp = time.monotonic()
         return True
 
+    @property
+    def fps(self) -> float:
+        """The driver's reported frame rate, or 0.0 when it does not say."""
+        if self._cap is None:
+            return 0.0
+        import cv2
+
+        fps = float(self._cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        return fps if fps > 0 and fps == fps else 0.0
+
     def _flip(self, frame: np.ndarray) -> np.ndarray:
         if not self.mirror:
             return frame
