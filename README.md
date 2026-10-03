@@ -36,6 +36,8 @@ Apple frameworks ([ADR 0001](docs/adr/0001-implementation-language.md)).
 Current limitations:
 
 - There is no shipping `.app`, overlay, event injection, Canvas, or Lens.
+- Linux builds the engine and the replay CLI only; live capture, tracking, and the app shell are macOS-only
+  (SRS PRT-3).
 - CI enforces an 85% line-coverage floor for `VisionDropCore`; this README does not publish a current measured percentage.
 - The committed replay fixture is synthetic. The real labelled evaluation corpus, pinch-F1 result, false-click measurement, and Vision-versus-MediaPipe A/B do not exist yet.
 - Swift recording format v2 is not backward-compatible with the Python prototype's headerless v1 files.
@@ -60,6 +62,7 @@ the target is now split by camera capability (SRS PERF-1a/1b) rather than assume
 ## Requirements
 
 - macOS 15 or later, on Apple silicon for the supported configuration
+  (Linux: engine, replay CLI and tests only — see [Linux and other platforms](#linux-and-other-platforms))
 - Swift 6 toolchain
 - A webcam for recording/tracking
 - [uv](https://docs.astral.sh/uv/) and Python 3.11, for the Python prototype only
@@ -93,6 +96,20 @@ swift run visiondrop-cli record session.jsonl --seconds 20
 swift run visiondrop-cli replay session.jsonl --verbose
 ```
 
+### Linux and other platforms
+
+`VisionDropCore` and the `visiondrop-cli replay`/`info` commands build and run on Linux with a Swift 6
+toolchain. Camera capture (AVFoundation), hand tracking (Vision) and the menu-bar app (AppKit) are
+Apple-only: on Linux they are compiled out, `record` exits with an error, and `visiondrop-app` exits
+with status 1. Recordings made on a Mac replay identically on Linux. CI runs the Linux job in the
+`swift:6.1-noble` container.
+
+The Python prototype runs live on Linux (OpenCV + MediaPipe). It reads the screen size from `xrandr`
+there and from user32 on Windows, and falls back to 1920×1080 when it cannot.
+
+`Scripts/check-cli.sh` drives the built CLI with good and malformed arguments and recordings and
+asserts exit codes and messages on either platform.
+
 The current CI workflow runs these checks on `macos-15`:
 
 ```bash
@@ -101,6 +118,7 @@ swift format lint --strict --recursive Sources Tests
 swift test --enable-code-coverage
 python3 Scripts/coverage.py --minimum 85
 ./Scripts/check-fixtures.sh
+./Scripts/check-cli.sh
 ```
 
 `record` needs Camera permission. Because macOS binds permissions to a code signature, a binary run from
