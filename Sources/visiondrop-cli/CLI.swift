@@ -83,7 +83,6 @@ struct CLI {
         let lines: AnyIterator<String>
         if path == "-" {
             source = "stdin"
-            setvbuf(stdout, nil, _IOLBF, 0)
             lines = AnyIterator { readLine(strippingNewline: true) }
         } else {
             let url = URL(fileURLWithPath: path)
@@ -127,13 +126,15 @@ struct CLI {
                 eventSequence.append(event.rawValue)
                 counts[event.rawValue, default: 0] += 1
                 if flags.contains("--verbose") {
-                    print(
-                        String(
-                            format: "[%8.3f] ", state.timestamp.seconds)
-                            + event.rawValue.padding(toLength: 12, withPad: " ", startingAt: 0)
-                            + String(
-                                format: " pointer=(%.0f,%.0f) ratio=%.3f",
-                                state.pointer.x, state.pointer.y, state.pinch?.ratio ?? 0))
+                    // Unbuffered, so a live feed shows each event as it happens
+                    // even when stdout is a pipe.
+                    let line =
+                        String(format: "[%8.3f] ", state.timestamp.seconds)
+                        + event.rawValue.padding(toLength: 12, withPad: " ", startingAt: 0)
+                        + String(
+                            format: " pointer=(%.0f,%.0f) ratio=%.3f\n",
+                            state.pointer.x, state.pointer.y, state.pinch?.ratio ?? 0)
+                    FileHandle.standardOutput.write(Data(line.utf8))
                 }
             }
         }
