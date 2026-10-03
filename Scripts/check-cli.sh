@@ -48,7 +48,10 @@ check "replay fixture" 0 "click: 1" -- "$cli" replay "$fixture"
 check "replay --json" 0 '"press",' -- "$cli" replay "$fixture" --json
 check "replay flags before path" 0 "press" -- "$cli" replay --verbose "$fixture"
 check "info" 0 "recording format version: 2" -- "$cli" info
-check "help" 0 "replay <recording.jsonl>" -- "$cli" --help
+check "help" 0 "replay <recording.jsonl | ->" -- "$cli" --help
+check "replay stdin" 0 "click: 1" -- sh -c '"$1" replay - < "$2"' _ "$cli" "$fixture"
+check "replay stdin --json" 0 '"press",' -- sh -c '"$1" replay - --json < "$2"' _ "$cli" "$fixture"
+check "stdin with blank lines" 0 "click: 1" -- sh -c 'sed G "$2" | "$1" replay -' _ "$cli" "$fixture"
 check "header-only recording" 0 "replayed 0 frames" -- "$cli" replay "$tmp/header-only.jsonl"
 
 echo "── bad arguments"
@@ -77,6 +80,22 @@ check "timestamps go backwards" 2 "monotonic" -- "$cli" replay "$tmp/backwards.j
 check "no primary display" 2 "primary" -- "$cli" replay "$tmp/no-primary.jsonl"
 check "hand with 20 points" 2 "error:" -- "$cli" replay "$tmp/twenty-points.jsonl"
 check "binary garbage" 2 "error:" -- "$cli" replay "$tmp/binary.jsonl"
+
+echo "── live stdin"
+# The press is on line 6. Hold the rest of the stream back and check the press
+# was already reported: events must come out as frames arrive, not at EOF.
+{ head -n 8 "$fixture"; sleep 4; tail -n +9 "$fixture"; } \
+    | "$cli" replay - --verbose >"$tmp/live.out" 2>&1 &
+live=$!
+sleep 2
+check "event emitted before EOF" 0 "press" -- cat "$tmp/live.out"
+check "click not yet emitted" 1 "" -- grep -q click "$tmp/live.out"
+wait "$live"
+check "stream completes" 0 "click" -- cat "$tmp/live.out"
+check "empty stdin" 2 "no lines" -- sh -c '"$1" replay - < /dev/null' _ "$cli"
+check "stdin frame first" 2 "header" -- sh -c '"$1" replay - < "$2"' _ "$cli" "$tmp/no-header.jsonl"
+check "stdin bad line mid-stream" 2 "line 2" -- sh -c '"$1" replay - < "$2"' _ "$cli" "$tmp/malformed.jsonl"
+check "stdin backwards" 2 "monotonic" -- sh -c '"$1" replay - < "$2"' _ "$cli" "$tmp/backwards.jsonl"
 
 echo "── platform ($(uname -s))"
 if [[ "$(uname -s)" == "Darwin" ]]; then

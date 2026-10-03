@@ -46,9 +46,11 @@ struct CLI {
             """
             visiondrop-cli — headless engine tooling
 
-              replay <recording.jsonl> [--verbose] [--json]
+              replay <recording.jsonl | -> [--verbose] [--json]
                   Replay a recorded session through the engine and report the
-                  gesture events and timing it produced.
+                  gesture events and timing it produced. `-` reads a live v2
+                  stream from stdin and handles each frame as it arrives, e.g.
+                  `visiondrop run --emit-v2 | visiondrop-cli replay - --verbose`.
 
               record <out.jsonl> [--seconds N] [--device ID] [--no-mirror]
                   Capture from the camera, track hands, and write a replayable
@@ -75,29 +77,46 @@ struct CLI {
         let (path, flags, _) = try parse(
             arguments, command: "replay", switches: ["--verbose", "--json"], options: [])
 
-        let url = URL(fileURLWithPath: path)
-        let text = try String(contentsOf: url, encoding: .utf8)
-        let session = try SessionCodec().decode(jsonl: text)
+        // Lines are decoded and run one at a time, so `-` can be a live feed:
+        // another tracker writing v2 frames to our stdin as it sees them.
+        let source: String
+        let lines: AnyIterator<String>
+        if path == "-" {
+            source = "stdin"
+            setvbuf(stdout, nil, _IOLBF, 0)
+            lines = AnyIterator { readLine(strippingNewline: true) }
+        } else {
+            let url = URL(fileURLWithPath: path)
+            source = url.lastPathComponent
+            let text = try String(contentsOf: url, encoding: .utf8)
+            lines = AnyIterator(
+                text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init).makeIterator())
+        }
 
-        let layout = DisplayLayout(
-            displays: session.header.displays.map {
-                Display(
-                    id: $0.id,
-                    bounds: ScreenRect(
-                        x: $0.bounds[0], y: $0.bounds[1], width: $0.bounds[2], height: $0.bounds[3]),
-                    scale: $0.scale,
-                    isPrimary: $0.primary
-                )
-            })
-
+        let codec = SessionCodec()
         let config = EngineConfiguration()
-        var engine = Engine(config: config, layout: layout, frameAspect: session.header.camera.aspect)
+        var header: SessionHeader?
+        var engine = Engine(config: config)
+        var frames: [Double] = []
+        var number = 0
         var eventSequence: [String] = []
         var counts: [String: Int] = [:]
         var durations: [Double] = []
         var handsPresent = 0
 
-        for frame in session.frames {
+        while let raw = lines.next() {
+            number += 1
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            if header == nil {
+                let decoded = try codec.decodeHeader(line: line)
+                header = decoded
+                engine = Engine(
+                    config: config, layout: layout(of: decoded), frameAspect: decoded.camera.aspect)
+                continue
+            }
+            let frame = try codec.decodeFrame(line: line, number: number, after: frames.last)
+            frames.append(frame.t)
             let observation = frame.observation(minimumConfidence: config.tracking.minimumLandmarkConfidence)
             let started = DispatchTime.now().uptimeNanoseconds
             let state = engine.process(observation)
@@ -119,11 +138,13 @@ struct CLI {
             }
         }
 
+        guard let header else { throw SessionError.emptyRecording }
+
         let sorted = durations.sorted()
         let report = ReplayReport(
-            frames: session.frames.count,
+            frames: frames.count,
             handsPresent: handsPresent,
-            durationSeconds: (session.frames.last?.t ?? 0) - (session.frames.first?.t ?? 0),
+            durationSeconds: (frames.last ?? 0) - (frames.first ?? 0),
             eventSequence: eventSequence,
             events: counts,
             meanProcessingMicroseconds: durations.isEmpty
@@ -137,8 +158,8 @@ struct CLI {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             print(String(decoding: try encoder.encode(report), as: UTF8.self))
         } else {
-            print("replayed \(report.frames) frames from \(url.lastPathComponent)")
-            print("  tracker:   \(session.header.tracker)")
+            print("replayed \(report.frames) frames from \(source)")
+            print("  tracker:   \(header.tracker)")
             print("  hands:     \(report.handsPresent)/\(report.frames) frames")
             print(
                 String(
@@ -152,6 +173,19 @@ struct CLI {
                 }
             }
         }
+    }
+
+    static func layout(of header: SessionHeader) -> DisplayLayout {
+        DisplayLayout(
+            displays: header.displays.map {
+                Display(
+                    id: $0.id,
+                    bounds: ScreenRect(
+                        x: $0.bounds[0], y: $0.bounds[1], width: $0.bounds[2], height: $0.bounds[3]),
+                    scale: $0.scale,
+                    isPrimary: $0.primary
+                )
+            })
     }
 
     // MARK: info
