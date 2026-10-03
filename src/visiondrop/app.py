@@ -168,10 +168,14 @@ def _info(_: argparse.Namespace) -> int:
     print(f"visiondrop {__version__}")
     print(f"screen: {primary_screen_size()[0]}x{primary_screen_size()[1]}")
     print(f"camera index: {_config.DEFAULT_CONFIG.camera_index}")
-    print("\nPermissions required (macOS):")
-    print("  Camera            - hand tracking")
-    print("  Accessibility     - injecting clicks/keys (Phase 3)")
-    print("  Screen Recording  - magnifier and OCR (Phase 5)")
+    if sys.platform == "darwin":
+        print("\nPermissions required (macOS):")
+        print("  Camera            - hand tracking")
+        print("  Accessibility     - injecting clicks/keys (Phase 3)")
+        print("  Screen Recording  - magnifier and OCR (Phase 5)")
+    elif sys.platform.startswith("linux"):
+        print("\nCamera access (Linux): read access to /dev/video* (usually the 'video' group)")
+        print("Screen size comes from xrandr; without it the 1920x1080 fallback is used.")
     return 0
 
 
