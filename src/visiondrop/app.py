@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import signal
 import sys
 import time
@@ -18,7 +19,7 @@ from . import config as _config
 from .capture import CameraCapture
 from .engine import Engine, primary_screen_size
 from .gestures import PinchEventKind
-from .telemetry import FPSCounter, JsonlRecorder, LatencyMeter, load_recording
+from .telemetry import FPSCounter, JsonlRecorder, LatencyMeter, V2Writer, load_recording
 
 
 def _format_events(events: tuple[PinchEventKind, ...], cursor: tuple[int, int]) -> str:
@@ -35,6 +36,8 @@ def _run(args: argparse.Namespace) -> int:
     cfg = _config.DEFAULT_CONFIG
     recorder = JsonlRecorder(args.record) if args.record else None
     recorder_ctx = recorder if recorder else _NullContext()
+    # With --emit-v2, stdout carries the landmark stream, so status goes to stderr.
+    log = sys.stderr if args.emit_v2 else sys.stdout
 
     try:
         with CameraCapture(config=cfg) as camera, recorder_ctx:
@@ -46,6 +49,18 @@ def _run(args: argparse.Namespace) -> int:
 
             tracker = HandTracker(cfg)
             engine = Engine(cfg, frame_aspect=aspect)
+            stream = (
+                V2Writer(
+                    sys.stdout,
+                    camera_size=camera.actual_size,
+                    fps=camera.fps,
+                    mirrored=camera.mirror,
+                    screen_size=primary_screen_size(),
+                    camera_id=f"opencv:{camera.index}",
+                )
+                if args.emit_v2
+                else None
+            )
             fps = FPSCounter()
             latency = LatencyMeter()
             last_timestamp = 0.0
@@ -54,9 +69,13 @@ def _run(args: argparse.Namespace) -> int:
             print(
                 f"VisionDrop {__version__} running: camera={cfg.camera_index} "
                 f"size={camera.actual_size[0]}x{camera.actual_size[1]} "
-                f"screen={primary_screen_size()[0]}x{primary_screen_size()[1]}"
+                f"screen={primary_screen_size()[0]}x{primary_screen_size()[1]}",
+                file=log,
             )
-            print("Point with your index finger. Pinch thumb+index to click/drag. Ctrl+C to stop.")
+            print(
+                "Point with your index finger. Pinch thumb+index to click/drag. Ctrl+C to stop.",
+                file=log,
+            )
 
             while True:
                 frame, timestamp = camera.read()
@@ -73,9 +92,14 @@ def _run(args: argparse.Namespace) -> int:
 
                 if recorder is not None:
                     recorder.write(observation)
+                if stream is not None:
+                    stream.write(observation)
 
                 if state.events:
-                    print(f"[{state.timestamp_s:8.3f}] {_format_events(state.events, state.cursor)}")
+                    print(
+                        f"[{state.timestamp_s:8.3f}] {_format_events(state.events, state.cursor)}",
+                        file=log,
+                    )
 
                 if args.debug_window:
                     import cv2
@@ -94,10 +118,17 @@ def _run(args: argparse.Namespace) -> int:
                         f"latency={stats.mean_ms:5.1f}ms(p95 {stats.p95_ms:5.1f}) "
                         f"hand={'yes' if state.hand_present else 'no '} "
                         f"pinch={'closed' if state.pinch and state.pinch.closed else 'open  '} "
-                        f"cursor={state.cursor}"
+                        f"cursor={state.cursor}",
+                        file=log,
                     )
     except KeyboardInterrupt:
-        print("\nStopping.")
+        print("\nStopping.", file=log)
+    except BrokenPipeError:
+        # The reader of --emit-v2 went away. Point stdout at devnull so the
+        # interpreter's final flush does not raise a second time.
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        print("stream reader closed; stopping.", file=sys.stderr)
+        return 1
     except RuntimeError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
@@ -188,6 +219,11 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--record", type=Path, default=None, help="write landmark stream to JSONL")
     run.add_argument("--debug-window", action="store_true", help="show skeleton window (off by default)")
     run.add_argument("--report-interval", type=float, default=5.0, help="seconds between status lines")
+    run.add_argument(
+        "--emit-v2",
+        action="store_true",
+        help="write a live v2 landmark stream to stdout for `visiondrop-cli replay -`",
+    )
     run.set_defaults(func=_run)
 
     replay = subparsers.add_parser("replay", help="replay a recorded landmark stream")

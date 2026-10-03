@@ -25,6 +25,9 @@ expect() {
 }
 
 expect Tests/Fixtures/pinch-click.jsonl "press click"
+# Written by the Python prototype's V2Writer from its own synthetic hands: the
+# MediaPipe → Swift bridge contract (tools/lab/tests/test_v2_stream.py).
+expect Tests/Fixtures/prototype-pinch-click.jsonl "press click"
 
 
 exit "$failures"
