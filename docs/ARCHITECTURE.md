@@ -93,6 +93,11 @@ Off Apple platforms, everything in Kit and the app target that imports AVFoundat
 is compiled out with `#if canImport(...)`. Core and the replay CLI build and test on Linux (CI job
 `linux`); `record` and `visiondrop-app` exit with an error there rather than failing to build
 (SRS PRT-3). New platform code follows the same rule: guard on the framework, not on `os(macOS)`.
+
+Live input off macOS arrives over the recording format rather than through `HandTracking`: the CLI's
+`replay -` decodes stdin a line at a time (`SessionCodec.decodeHeader`/`decodeFrame`), and the Python
+prototype's `V2Writer` produces that stream from MediaPipe. This keeps MediaPipe out of the Swift
+package (SRS CON-2) and makes every live Linux session replayable byte for byte.
 ---
 
 ## 2. Concurrency model

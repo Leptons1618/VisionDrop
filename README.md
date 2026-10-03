@@ -36,8 +36,8 @@ Apple frameworks ([ADR 0001](docs/adr/0001-implementation-language.md)).
 Current limitations:
 
 - There is no shipping `.app`, overlay, event injection, Canvas, or Lens.
-- Linux builds the engine and the replay CLI only; live capture, tracking, and the app shell are macOS-only
-  (SRS PRT-3).
+- On Linux the Swift engine runs live only through the Python prototype's MediaPipe tracker
+  (`--emit-v2`); native Swift capture, tracking, and the app shell are macOS-only (SRS PRT-3).
 - CI enforces an 85% line-coverage floor for `VisionDropCore`; this README does not publish a current measured percentage.
 - The committed replay fixture is synthetic. The real labelled evaluation corpus, pinch-F1 result, false-click measurement, and Vision-versus-MediaPipe A/B do not exist yet.
 - Swift recording format v2 is not backward-compatible with the Python prototype's headerless v1 files.
@@ -62,7 +62,8 @@ the target is now split by camera capability (SRS PERF-1a/1b) rather than assume
 ## Requirements
 
 - macOS 15 or later, on Apple silicon for the supported configuration
-  (Linux: engine, replay CLI and tests only — see [Linux and other platforms](#linux-and-other-platforms))
+  (Linux: engine, replay CLI, tests, and live tracking via the Python bridge — see
+  [Linux and other platforms](#linux-and-other-platforms))
 - Swift 6 toolchain
 - A webcam for recording/tracking
 - [uv](https://docs.astral.sh/uv/) and Python 3.11, for the Python prototype only
@@ -104,8 +105,23 @@ Apple-only: on Linux they are compiled out, `record` exits with an error, and `v
 with status 1. Recordings made on a Mac replay identically on Linux. CI runs the Linux job in the
 `swift:6.1-noble` container.
 
-The Python prototype runs live on Linux (OpenCV + MediaPipe). It reads the screen size from `xrandr`
-there and from user32 on Windows, and falls back to 1920×1080 when it cannot.
+To run the Swift engine live on Linux, let the Python prototype's MediaPipe tracker feed it. `--emit-v2`
+writes a v2 landmark stream to stdout (status lines move to stderr), and `replay -` reads stdin a frame
+at a time, printing gesture events as they happen:
+
+```bash
+uv run visiondrop run --emit-v2 | swift run visiondrop-cli replay - --verbose
+uv run visiondrop run --emit-v2 | tee session.jsonl | swift run visiondrop-cli replay -   # keep a copy
+```
+
+The bridge converts in one place (`V2Writer`): y flips to Vision's bottom-left origin, MediaPipe's depth
+is dropped (SRS CON-5), and the hand score stands in for per-joint confidence. A tracker is recorded
+as `mediapipe.hands.python`, so these sessions are never mistaken for Vision ones (SRS DAT-2).
+`Tests/Fixtures/prototype-pinch-click.jsonl` is that writer's output, and the fixture gate replays it.
+
+The prototype also runs fully on its own on Linux. It reads the screen size from `xrandr` there and
+from user32 on Windows, and falls back to 1920×1080 when it cannot. Camera access needs read access to
+`/dev/video*`, usually through the `video` group.
 
 `Scripts/check-cli.sh` drives the built CLI with good and malformed arguments and recordings and
 asserts exit codes and messages on either platform.

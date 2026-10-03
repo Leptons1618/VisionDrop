@@ -568,7 +568,7 @@ set the depth component to zero. A fixture that cannot express a value cannot te
 | --- | --- | :---: | :---: |
 | **PRT-1** | The engine module shall depend on no platform framework, so it remains portable if ADR 0001 is revisited. | M | I |
 | **PRT-2** | The recording format shall be platform- and tracker-independent. | M | I |
-| **PRT-3** | Non-Apple platform support. Partial since 2026-10-03: `VisionDropCore` and `visiondrop-cli replay`/`info` build and pass their tests on Linux in CI; Apple-framework code is compiled out, and `record` and `visiondrop-app` exit with an error there. Live capture, tracking, overlay and injection off macOS remain `W`. | W | T |
+| **PRT-3** | Non-Apple platform support. Partial since 2026-10-03: `VisionDropCore` and `visiondrop-cli replay`/`info` build and pass their tests on Linux in CI; Apple-framework code is compiled out, and `record` and `visiondrop-app` exit with an error there. The engine runs live on Linux by reading a v2 stream on stdin (`replay -`) from the Python prototype's MediaPipe tracker (`visiondrop run --emit-v2`); the bridge is pinned by a cross-language fixture. Native capture and tracking, overlay and injection off macOS remain `W`. | W | T |
 
 ---
 
