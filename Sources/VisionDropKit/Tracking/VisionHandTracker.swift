@@ -1,3 +1,6 @@
+// Apple Vision is unavailable off Apple platforms.
+#if canImport(Vision)
+
 import CoreVideo
 import Foundation
 import Vision
@@ -123,3 +126,5 @@ extension HandJoint {
         }
     }
 }
+
+#endif

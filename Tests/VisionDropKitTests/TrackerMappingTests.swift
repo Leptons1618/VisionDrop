@@ -1,3 +1,6 @@
+// Apple Vision is unavailable off Apple platforms; there is nothing here to test.
+#if canImport(Vision)
+
 import Testing
 import Vision
 import VisionDropCore
@@ -69,3 +72,5 @@ struct TrackerMappingTests {
         #expect(VisionHandTracker.chirality(of: collapsed) == .unknown)
     }
 }
+
+#endif
